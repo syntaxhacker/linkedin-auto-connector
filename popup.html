@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  width:300px; padding:12px;
+  font-family:'Poppins','Roboto',sans-serif;
+  background:#000; color:#fff;
+}
+header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+header h1 { font-size:14px; font-weight:700; color:#fff; display:flex; align-items:center; gap:6px; }
+.section { background:#0d0d0d; border:1px solid #222; border-radius:8px; padding:10px; margin-bottom:10px; }
+.section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#3b82f6; margin-bottom:8px; }
+
+.status { display:flex; justify-content:space-between; align-items:center; background:#0d0d0d; border:1px solid #222; padding:8px 10px; border-radius:8px; margin-bottom:10px; font-size:12px; }
+#status-text { font-weight:600; }
+#status-dot { width:9px; height:9px; border-radius:50%; background:#333; }
+#status-dot.active { background:#3b82f6; box-shadow:0 0 8px #3b82f6; }
+
+.counters { display:flex; gap:6px; margin-bottom:10px; }
+.counter-card { flex:1; background:#0d0d0d; border:1px solid #222; border-radius:8px; padding:8px 6px; text-align:center; }
+.counter-card .num { font-size:18px; font-weight:700; color:#3b82f6; }
+.counter-card .cap { font-size:10px; color:#888; margin-top:2px; }
+
+button { flex:1; padding:7px 8px; border:1px solid #3b82f6; border-radius:6px; background:#3b82f6; color:#fff; font-size:12px; font-weight:600; font-family:'Roboto',sans-serif; cursor:pointer; transition:all 0.2s; }
+button:active { transform:scale(0.97); }
+#btn-stop, #btn-reset { background:#0d0d0d; color:#fff; }
+
+.delay-row { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:12px; }
+.delay-row label { color:#888; }
+.delay-row input { width:56px; padding:4px 6px; border:1px solid #222; border-radius:4px; background:#000; color:#fff; font-size:12px; text-align:center; }
+.delay-row input:focus { outline:none; border-color:#3b82f6; }
+.delay-row .range { display:flex; align-items:center; gap:6px; }
+.delay-row .range span { color:#888; font-size:11px; }
+
+.log { background:#0d0d0d; border:1px solid #222; border-radius:8px; padding:8px 10px; font-size:11px; font-family:monospace; color:#fff; min-height:30px; word-break:break-all; margin-bottom:8px; }
+.hint { font-size:10px; color:#888; text-align:center; margin-top:4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>🔗</span> LI Auto-Connector</h1>
+</header>
+
+<div class="status">
+  <span id="status-text"></span>
+  <div id="status-dot"></div>
+</div>
+
+<div class="counters">
+  <div class="counter-card"><div class="num" id="count-ok">0</div><div class="cap">Connected</div></div>
+  <div class="counter-card"><div class="num" id="count-skip">0</div><div class="cap">Skipped</div></div>
+</div>
+
+<div class="section">
+  <div class="section-title">Controls</div>
+  <div class="row" style="display:flex;gap:6px;margin-bottom:8px;">
+    <button id="btn-search">🔍 Search</button>
+    <button id="btn-start">▶ Start</button>
+    <button id="btn-stop">⏹ Stop</button>
+    <button id="btn-reset">↺</button>
+  </div>
+  <div class="delay-row">
+    <label>Delay</label>
+    <div class="range">
+      <input type="number" id="delay-min" value="1500" min="500" step="500">
+      <span>–</span>
+      <input type="number" id="delay-max" value="3000" min="500" step="500">
+      <span>ms</span>
+    </div>
+  </div>
+</div>
+
+<div class="log" id="log">Open LinkedIn → click Search → buttons glow → click Start</div>
+<div class="hint">v1.3 — Connect + feed email scanner</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

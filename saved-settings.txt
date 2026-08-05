@@ -1,0 +1,20 @@
+# LinkedIn Auto-Connector — Saved Settings Reference
+
+Copy these into the panel after reloading the extension from the new path
+(`~/Documents/Extensions/linkedin-auto-connector/`).
+
+## Include keywords
+```
+react+senior, reactjs, senior, nodejs, python, hiring, hire
+```
+
+## Exclude keywords
+```
+Consultant, fresher, .net, retail industry, kotlin, github, vibe coding, qa, cobol, h-1b, opt, healthcare recruiter, sap
+```
+
+## Other settings
+- Auto-expand posts: ON
+- Scan posts for emails: ON
+- Debug logs (console): ON
+- Auto-scroll: OFF (toggle as needed)

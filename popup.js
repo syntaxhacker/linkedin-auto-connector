@@ -1,5 +1,16 @@
 const $ = id => document.getElementById(id);
 let tabUrl = '';
+let lastScanCount = 0;
+const startBtn = $('btn-start'), searchBtn = $('btn-search'), stopBtn = $('btn-stop');
+startBtn.disabled = true;
+stopBtn.disabled = true;
+
+// Status dot: 'idle' (grey) | 'active' (green, pulsing) | 'error' (red)
+function setStatus(state, text) {
+  const dot = $('status-dot');
+  dot.className = state === 'active' ? 'active' : state === 'error' ? 'error' : '';
+  $('status-text').textContent = text;
+}
 
 function send(msg, cb) {
   chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
@@ -7,8 +18,11 @@ function send(msg, cb) {
     tabUrl = tabs[0].url || '';
     chrome.tabs.sendMessage(tabs[0].id, msg, response => {
       if (chrome.runtime.lastError) {
-        if (tabUrl.includes('linkedin.com')) $('log').textContent = '⚠ Reload the page (F5) to activate extension.';
-        else $('log').textContent = '⚠ Not on LinkedIn. Open a search page.';
+        const text = tabUrl.includes('linkedin.com')
+          ? '⚠ Reload the page (F5) to activate extension.'
+          : '⚠ Not on LinkedIn. Open a search page.';
+        setStatus('error', text);
+        $('log').textContent = text;
         return;
       }
       if (cb) cb(response);
@@ -20,15 +34,23 @@ function updateUI(s) {
   if (!s) return;
   $('count-ok').textContent = s.connected || 0;
   $('count-skip').textContent = s.skipped || 0;
-  const dot = $('status-dot'); dot.className = '';
-  if (s.running) { dot.classList.add('active'); $('status-text').textContent = 'Running...'; }
-  else { dot.classList.remove('active'); $('status-text').textContent = ''; }
+  setStatus(s.running ? 'active' : 'idle', s.running ? 'Running…' : 'Idle — open LinkedIn search page');
 }
 
 function saveDelay() {
   const min = parseInt($('delay-min').value, 10) || 1500;
   const max = parseInt($('delay-max').value, 10) || 3000;
-  if (min >= 500 && max >= min) chrome.storage.sync.set({ delayMin: min, delayMax: max });
+  const WARNING = '⚠ Min delay must be ≤ max (both ≥ 500 ms)';
+  if (min > max || min < 500) {
+    $('delay-min').classList.add('invalid');
+    $('delay-max').classList.add('invalid');
+    $('log').textContent = WARNING;
+    return;
+  }
+  $('delay-min').classList.remove('invalid');
+  $('delay-max').classList.remove('invalid');
+  chrome.storage.sync.set({ delayMin: min, delayMax: max });
+  if ($('log').textContent === WARNING) $('log').textContent = '';
 }
 
 // Load saved delay
@@ -42,34 +64,48 @@ chrome.storage.sync.get({
 $('delay-min').addEventListener('change', saveDelay);
 $('delay-max').addEventListener('change', saveDelay);
 
-$('btn-search').addEventListener('click', () => {
+searchBtn.addEventListener('click', () => {
   send({ type: 'SCAN' }, resp => {
-    if (resp) $('log').textContent = resp.count > 0
-      ? '🔍 Found ' + resp.count + ' Connect buttons — highlighted!'
-      : '🔍 No Connect buttons found.';
+    if (resp) {
+      lastScanCount = resp.count || 0;
+      startBtn.disabled = lastScanCount <= 0;
+      $('log').textContent = resp.count > 0
+        ? '🔍 Found ' + resp.count + ' Connect buttons — highlighted!'
+        : '🔍 No Connect buttons found.';
+      send({ type: 'STATUS' }, updateUI); // refresh counters + clear stale error state
+    }
   });
 });
 
-$('btn-start').addEventListener('click', () => {
+startBtn.addEventListener('click', () => {
   const min = parseInt($('delay-min').value, 10) || 1500;
   const max = parseInt($('delay-max').value, 10) || 3000;
+  startBtn.disabled = true;
+  searchBtn.disabled = true;
+  stopBtn.disabled = false;
   send({ type: 'START', delayMin: min, delayMax: max }, resp => {
-    if (resp && resp.ok) $('log').textContent = '▶ Connecting...';
-    else if (resp && !resp.ok) $('log').textContent = '⚠ Click Search first to find buttons.';
+    if (resp && resp.ok) { setStatus('active', 'Connecting…'); $('log').textContent = '▶ Connecting...'; }
+    else if (resp && !resp.ok) { setStatus('error', '⚠ Click Search first to find buttons.'); $('log').textContent = '⚠ Click Search first to find buttons.'; }
   });
 });
 
-$('btn-stop').addEventListener('click', () => {
+stopBtn.addEventListener('click', () => {
   send({ type: 'STOP' });
+  searchBtn.disabled = false;
+  startBtn.disabled = lastScanCount <= 0;
+  stopBtn.disabled = true;
+  setStatus('idle', 'Idle — open LinkedIn search page');
   $('log').textContent = '⏹ Stopped.';
 });
 
 $('btn-reset').addEventListener('click', () => {
   send({ type: 'RESET' });
+  searchBtn.disabled = false;
+  startBtn.disabled = lastScanCount <= 0;
+  stopBtn.disabled = true;
   $('count-ok').textContent = '0';
   $('count-skip').textContent = '0';
-  $('status-dot').className = '';
-  $('status-text').textContent = '';
+  setStatus('idle', '');
   $('log').textContent = '↺ Reset.';
 });
 

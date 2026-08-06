@@ -65,9 +65,9 @@
     const style = document.createElement('style');
     style.id = 'li-ac-styles';
     style.textContent =
-      '.' + HIDDEN_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; transition: max-height .25s ease, opacity .25s ease; }' +
+      '.' + HIDDEN_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
       '.' + HIDDEN_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
-      '.' + HL_CLS + ' { outline: 3px solid ' + BW.hl + '; outline-offset: 2px; box-shadow: 0 0 12px rgba(255,255,255,.4); transition: all 0.3s; }';
+      '.' + HL_CLS + ' { outline: 3px solid ' + C.warn + '; outline-offset: 2px; box-shadow: 0 0 12px rgba(251,191,36,.5); transition: all 0.3s; }';
     document.head.appendChild(style);
   }
 
@@ -89,8 +89,8 @@
   function updateBadge() {
     const c = document.getElementById('li-ac-count');
     const s = document.getElementById('li-ac-status');
-    if (c) c.innerHTML = 'Connected: <b>' + connected + '</b> | Skipped: <b>' + skipped + '</b>';
-    if (s) { s.style.display = isRunning ? 'block' : 'none'; s.textContent = isRunning ? '⏳ Running...' : ''; s.style.color = BW.fg; }
+    if (c) c.innerHTML = 'Connected: <b style="color:' + C.okText + '">' + connected + '</b> | Skipped: <b style="color:' + C.warn + '">' + skipped + '</b>';
+    if (s) { s.style.display = isRunning ? 'block' : 'none'; s.textContent = isRunning ? '⏳ Running...' : ''; s.style.color = C.warn; }
   }
   function log(msg) { const el = document.getElementById('li-ac-log'); if (el) el.textContent = msg; }
 
@@ -160,9 +160,9 @@
   function highlightAll() {
     for (const item of connectQueue) {
       item.el.classList.add('li-ac-hl');
-      item.el.style.outline = '3px solid ' + C.dustyDenim;
+      item.el.style.outline = '3px solid ' + C.infoOnWhite;
       item.el.style.outlineOffset = '2px';
-      item.el.style.boxShadow = '0 0 12px ' + C.dustyDenim + '80';
+      item.el.style.boxShadow = '0 0 12px rgba(37,99,235,.35)';
       item.el.style.transition = 'all 0.3s';
       item.el.title = 'LI Auto: ' + item.name;
     }
@@ -175,8 +175,8 @@
     if (!item) { finish(); return; }
 
     log('Connecting: ' + item.name);
-    item.el.style.outline = '3px solid ' + C.dustyDenim;
-    item.el.style.boxShadow = '0 0 12px ' + C.dustyDenim + '80';
+    item.el.style.outline = '3px solid ' + C.warn;
+    item.el.style.boxShadow = '0 0 12px rgba(251,191,36,.35)';
     item.el.click();
     await sleep(1000);
     if (!isRunning) return; // H2: STOP during the wait aborts before any send
@@ -190,13 +190,13 @@
       let sent = false;
       for (const b of btns) {
         if (b.textContent.includes('without') || b.textContent.includes('Send without')) {
-          b.style.outline = '3px solid ' + C.dustyDenim;
-          b.style.boxShadow = '0 0 16px ' + C.dustyDenim + '80';
+          b.style.outline = '3px solid ' + C.ok;
+          b.style.boxShadow = '0 0 16px rgba(34,197,94,.4)';
           b.click();
           connected++;
           sent = true;
           log('✅ Connected: ' + item.name);
-          item.el.style.outline = '3px solid ' + C.dustyDenim;
+          item.el.style.outline = '3px solid ' + C.ok;
           item.el.style.boxShadow = 'none';
           break;
         }
@@ -206,15 +206,15 @@
         log('⏭ Skipped (no send btn): ' + item.name);
         const dismiss = dialog.querySelector('button[aria-label="Dismiss"]');
         if (dismiss) dismiss.click();
-        item.el.style.outline = '3px solid ' + C.dustyDenim;
+        item.el.style.outline = '3px solid ' + C.warn;
       }
     } else {
       // Direct connect or failed
       await sleep(500);
       if (!isRunning) return; // H2
       const txt = (item.el.textContent || '').trim().toLowerCase();
-      if (txt === 'pending') { connected++; log('✅ Connected (direct): ' + item.name); item.el.style.outline = '3px solid ' + C.dustyDenim; }
-      else { skipped++; log('⏭ No dialog: ' + item.name); }
+      if (txt === 'pending') { connected++; log('✅ Connected (direct): ' + item.name); item.el.style.outline = '3px solid ' + C.ok; }
+      else { skipped++; log('⏭ No dialog: ' + item.name); item.el.style.outline = '3px solid ' + C.danger; }
     }
     updateBadge();
     await sleep(randomDelay());
@@ -550,8 +550,10 @@
       const badge = li.querySelector('[data-viewed]');
       if (!badge) {
         const head = li.firstElementChild;
-        if (head) head.insertAdjacentHTML('beforeend', '<span data-viewed style="display:inline-block;margin-left:5px;color:' + BW.fg + ';font-weight:700;font-size:11px;">✓ seen</span>');
+        if (head) head.insertAdjacentHTML('beforeend', '<span data-viewed style="display:inline-block;margin-left:5px;color:' + C.okText + ';background:' + C.seenChipBg + ';border:1px solid ' + C.seenBorder + ';border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700;">✓ seen</span>');
       }
+      li.style.background = C.seenRowTint;
+      li.style.borderLeft = '3px solid ' + C.seenBorder;
       disableAutoScroll();
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       const oldOutline = el.style.outline;
@@ -584,11 +586,12 @@
   function hitRowHtml(hit, i, kind) {
     const meta = hitMeta.get(kind + ':' + hit.key) || { firstSeen: Date.now(), viewed: false };
     const badge = meta.viewed
-      ? '<span data-viewed style="display:inline-block;margin-left:5px;color:' + BW.fg + ';font-weight:700;font-size:12px;">✓ seen</span>'
+      ? '<span data-viewed style="display:inline-block;margin-left:5px;color:' + C.okText + ';background:' + C.seenChipBg + ';border:1px solid ' + C.seenBorder + ';border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700;">✓ seen</span>'
       : '';
     const dim = meta.viewed ? ';opacity:.5' : '';
+    const rowStyle = 'padding:8px 9px;cursor:pointer;border-bottom:1px solid ' + BW.border + ';border-radius:4px;border-left:3px solid ' + (meta.viewed ? C.seenBorder : 'transparent') + ';' + (meta.viewed ? 'background:' + C.seenRowTint + ';' : '');
     const headline = kind === 'kw' ? hit.keywords.map(escHtml).join(', ') : hit.emails.map(escHtml).join('<br>');
-    return '<div data-idx="' + i + '" data-kind="' + kind + '" data-key="' + escHtml(hit.key) + '" style="padding:8px 9px;cursor:pointer;border-bottom:1px solid ' + BW.border + ';border-radius:4px;">' +
+    return '<div data-idx="' + i + '" data-kind="' + kind + '" data-key="' + escHtml(hit.key) + '" style="' + rowStyle + '">' +
       '<div style="color:' + BW.fg + ';font-size:14px;word-break:break-all;">' + headline + badge + '</div>' +
       '<div style="color:' + BW.muted + ';font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + dim + '">' + escHtml((hit.el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70)) + '</div>' +
       '<div data-ago style="color:' + BW.muted + ';opacity:.8;font-size:11px;">' + timeAgo(meta.firstSeen) + '</div>' +

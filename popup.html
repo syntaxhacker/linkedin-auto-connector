@@ -5,6 +5,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+:root { --ok:#22c55e; --ok-text:#4ade80; --warn:#fbbf24; --danger:#f87171; --info:#60a5fa; --focus:#60a5fa; --card-bg:#141414; --border-soft:#444444; --border-strong:#666666; --muted:#bbbbbb; } /* mirrors palette.js */
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
   width:300px; padding:12px;
@@ -13,31 +14,40 @@ body {
 }
 header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 header h1 { font-size:14px; font-weight:700; color:#fff; display:flex; align-items:center; gap:6px; }
-.section { background:#0d0d0d; border:1px solid #222; border-radius:8px; padding:10px; margin-bottom:10px; }
+.section { background:var(--card-bg); border-color:var(--border-soft); border-radius:8px; padding:10px; margin-bottom:10px; }
 .section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#3b82f6; margin-bottom:8px; }
 
-.status { display:flex; justify-content:space-between; align-items:center; background:#0d0d0d; border:1px solid #222; padding:8px 10px; border-radius:8px; margin-bottom:10px; font-size:12px; }
+.status { display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border-color:var(--border-soft); padding:8px 10px; border-radius:8px; margin-bottom:10px; font-size:12px; }
 #status-text { font-weight:600; }
-#status-dot { width:9px; height:9px; border-radius:50%; background:#333; }
-#status-dot.active { background:#3b82f6; box-shadow:0 0 8px #3b82f6; }
+#status-dot { width:9px; height:9px; border-radius:50%; background:#555; }
+#status-dot.active { background:var(--ok); animation:pulse 1.2s infinite; }
+#status-dot.error { background:var(--danger); box-shadow:0 0 8px var(--danger); animation:none; }
+@keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(34,197,94,.5); } 50% { box-shadow:0 0 0 6px rgba(34,197,94,0); } }
 
 .counters { display:flex; gap:6px; margin-bottom:10px; }
-.counter-card { flex:1; background:#0d0d0d; border:1px solid #222; border-radius:8px; padding:8px 6px; text-align:center; }
+.counter-card { flex:1; background:var(--card-bg); border-color:var(--border-soft); border-radius:8px; padding:8px 6px; text-align:center; }
 .counter-card .num { font-size:18px; font-weight:700; color:#3b82f6; }
+#count-ok { color:var(--ok-text); } #count-skip { color:var(--warn); }
 .counter-card .cap { font-size:10px; color:#888; margin-top:2px; }
 
-button { flex:1; padding:7px 8px; border:1px solid #3b82f6; border-radius:6px; background:#3b82f6; color:#fff; font-size:12px; font-weight:600; font-family:'Roboto',sans-serif; cursor:pointer; transition:all 0.2s; }
+button { flex:1; padding:7px 8px; border:1px solid var(--info); border-radius:6px; background:var(--info); color:#000; font-size:12px; font-weight:600; font-family:'Roboto',sans-serif; cursor:pointer; transition:all 0.2s; }
 button:active { transform:scale(0.97); }
-#btn-stop, #btn-reset { background:#0d0d0d; color:#fff; }
+#btn-start { background:var(--ok); border-color:var(--ok); color:#052e16; }
+#btn-stop { background:var(--danger); border-color:var(--danger); color:#450a0a; }
+#btn-search { background:var(--info); border-color:var(--info); color:#000; }
+#btn-reset { background:#0d0d0d; color:#fff; border-color:var(--border-strong); }
+button:disabled { opacity:.45; cursor:not-allowed; }
+button:focus-visible, input:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
 
 .delay-row { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:12px; }
 .delay-row label { color:#888; }
 .delay-row input { width:56px; padding:4px 6px; border:1px solid #222; border-radius:4px; background:#000; color:#fff; font-size:12px; text-align:center; }
-.delay-row input:focus { outline:none; border-color:#3b82f6; }
+.delay-row input:focus { outline:none; border-color:var(--focus); }
+.invalid { border-color:var(--danger) !important; }
 .delay-row .range { display:flex; align-items:center; gap:6px; }
 .delay-row .range span { color:#888; font-size:11px; }
 
-.log { background:#0d0d0d; border:1px solid #222; border-radius:8px; padding:8px 10px; font-size:11px; font-family:monospace; color:#fff; min-height:30px; word-break:break-all; margin-bottom:8px; }
+.log { background:var(--card-bg); border-color:var(--border-soft); border-radius:8px; padding:8px 10px; font-size:11px; font-family:monospace; color:#fff; min-height:30px; word-break:break-all; margin-bottom:8px; }
 .hint { font-size:10px; color:#888; text-align:center; margin-top:4px; }
 </style>
 </head>
@@ -60,10 +70,10 @@ button:active { transform:scale(0.97); }
 <div class="section">
   <div class="section-title">Controls</div>
   <div class="row" style="display:flex;gap:6px;margin-bottom:8px;">
-    <button id="btn-search">🔍 Search</button>
-    <button id="btn-start">▶ Start</button>
-    <button id="btn-stop">⏹ Stop</button>
-    <button id="btn-reset">↺</button>
+    <button id="btn-search" title="Scan the page for Connect buttons">🔍 Search</button>
+    <button id="btn-start" title="Start sending connection requests">▶ Start</button>
+    <button id="btn-stop" title="Stop the current run">⏹ Stop</button>
+    <button id="btn-reset" title="Reset counters and clear highlights">↺</button>
   </div>
   <div class="delay-row">
     <label>Delay</label>

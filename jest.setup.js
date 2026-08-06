@@ -22,14 +22,30 @@
  */
 
 // ---------------------------------------------------------------------------
-// 1. Palette (5 color keys, same values as palette.js)
+// 1. Palette (same values as palette.js — keep in sync)
 // ---------------------------------------------------------------------------
 global.LI_PALETTE = {
   inkBlack: '#0d1321',
   deepSpaceBlue: '#1d2d44',
   blueSlate: '#3e5c76',
   dustyDenim: '#748cab',
-  eggshell: '#f0ebd8'
+  eggshell: '#f0ebd8',
+
+  // Semantic tokens (mirror palette.js)
+  ok: '#22c55e',
+  okText: '#4ade80',
+  warn: '#fbbf24',
+  danger: '#f87171',
+  info: '#60a5fa',
+  infoOnWhite: '#2563eb',
+  focus: '#60a5fa',
+  cardBg: '#141414',
+  borderSoft: '#444444',
+  borderStrong: '#666666',
+  muted: '#bbbbbb',
+  seenChipBg: 'rgba(34,197,94,.15)',
+  seenRowTint: 'rgba(34,197,94,.06)',
+  seenBorder: '#22c55e'
 };
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,277 @@
+"use strict";
+
+/**
+ * Panel minimize (collapse) feature:
+ *  - each floating panel (control #li-ac-panel, found #li-ac-found-panel) gets
+ *    a –/+ button in its header that collapses the panel BODY while keeping the
+ *    header visible;
+ *  - the two panels collapse/expand INDEPENDENTLY;
+ *  - state persists via chrome.storage.sync (panelMinimized / foundPanelMinimized),
+ *    is honored when loaded at init, applied from storage.onChanged, and survives
+ *    renderPanel re-renders (re-scans) and panel recreation.
+ */
+
+const { makePost, sendMessage, closePanels } = require('./helpers');
+
+const DEFAULTS = {
+  autoExpand: true,
+  scanEmails: true,
+  includeKeywords: [],
+  excludeKeywords: [],
+  autoScroll: false,
+  debug: false
+};
+
+describe('panel minimize (control + found)', () => {
+  beforeEach(() => {
+    closePanels();
+    global.__LI.stopAutoScroll();
+    document.body.innerHTML = '';
+    global.__LI.setCfg({ ...DEFAULTS });
+    global.__LI.setPanelMinimized(false);
+    global.__LI.setFoundPanelMinimized(false);
+    global.chrome.storage.sync.set.mockClear();
+    global.__LI.knownEmailsClear();
+    global.__LI.knownKeywordKeysClear();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    global.__LI.stopAutoScroll();
+    global.__LI.setPanelMinimized(false);
+    global.__LI.setFoundPanelMinimized(false);
+    global.__LI.cleanup();
+  });
+
+  async function openPanels() {
+    jest.useFakeTimers();
+    makePost('React role one bob@example.com');
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+  }
+
+  test('minimize collapses the control panel body but keeps the header', async () => {
+    await openPanels();
+    const panel = document.getElementById('li-ac-panel');
+    const body = panel.querySelector('#li-ac-panel-body');
+    const btn = panel.querySelector('#li-ac-panel-min');
+    expect(body).not.toBeNull();
+    expect(body.style.display).toBe(''); // expanded by default
+    expect(btn.textContent).toBe('–');
+
+    btn.click();
+    expect(global.__LI.getPanelMinimized()).toBe(true);
+    expect(body.style.display).toBe('none'); // body hidden
+    expect(btn.textContent).toBe('+'); // button flipped to expand state
+
+    // Header (title + close button) stays visible.
+    expect(panel.querySelector('#li-ac-panel-close')).not.toBeNull();
+    expect(panel.textContent).toContain('LI Auto');
+    expect(panel.firstElementChild.style.display).not.toBe('none');
+  });
+
+  test('clicking minimize again restores the body', async () => {
+    await openPanels();
+    const body = document.getElementById('li-ac-panel').querySelector('#li-ac-panel-body');
+    const btn = document.getElementById('li-ac-panel-min');
+    btn.click();
+    expect(body.style.display).toBe('none');
+    btn.click();
+    expect(global.__LI.getPanelMinimized()).toBe(false);
+    expect(body.style.display).toBe('');
+    expect(btn.textContent).toBe('–');
+  });
+
+  test('both panels minimize/expand independently', async () => {
+    await openPanels();
+    const panel = document.getElementById('li-ac-panel');
+    const found = document.getElementById('li-ac-found-panel');
+    const foundBody = found.querySelector('#li-ac-found-body');
+    const foundBtn = found.querySelector('#li-ac-found-min');
+
+    // Minimize only the found panel.
+    foundBtn.click();
+    expect(global.__LI.getFoundPanelMinimized()).toBe(true);
+    expect(foundBody.style.display).toBe('none');
+    expect(foundBtn.textContent).toBe('+');
+    expect(panel.querySelector('#li-ac-panel-body').style.display).not.toBe('none');
+
+    // Minimize the control panel too -> both collapsed.
+    panel.querySelector('#li-ac-panel-min').click();
+    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('none');
+    expect(foundBody.style.display).toBe('none');
+
+    // Expand only the control panel -> found stays collapsed (independent).
+    panel.querySelector('#li-ac-panel-min').click();
+    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('');
+    expect(foundBody.style.display).toBe('none');
+    expect(panel.querySelector('#li-ac-panel-min').textContent).toBe('–');
+    expect(foundBtn.textContent).toBe('+');
+  });
+
+  test('minimize state survives a renderPanel re-render (re-scan)', async () => {
+    await openPanels();
+    const panel = document.getElementById('li-ac-panel');
+    const body = panel.querySelector('#li-ac-panel-body');
+    const btn = panel.querySelector('#li-ac-panel-min');
+    btn.click();
+
+    document.getElementById('li-ac-found-min').click();
+
+    // Re-scan re-renders panel contents; the same connected panels stay put.
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    expect(document.getElementById('li-ac-panel')).toBe(panel);
+    expect(body.style.display).toBe('none');
+    expect(btn.textContent).toBe('+');
+    expect(document.getElementById('li-ac-found-body').style.display).toBe('none');
+    expect(document.getElementById('li-ac-found-min').textContent).toBe('+');
+
+    // Header listeners are NOT double-wired: a single click expands the panel
+    // (a doubly-wired listener would toggle twice and net back to collapsed).
+    btn.click();
+    expect(global.__LI.getPanelMinimized()).toBe(false);
+    expect(body.style.display).toBe('');
+  });
+
+  test('minimize state persists via chrome.storage.sync with the right keys', async () => {
+    await openPanels();
+    global.chrome.storage.sync.set.mockClear();
+
+    document.getElementById('li-ac-panel-min').click();
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: true });
+
+    global.chrome.storage.sync.set.mockClear();
+    document.getElementById('li-ac-found-min').click();
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ foundPanelMinimized: true });
+
+    global.chrome.storage.sync.set.mockClear();
+    document.getElementById('li-ac-panel-min').click(); // expand again
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: false });
+  });
+
+  test('storage.onChanged applies persisted minimize changes to open panels', async () => {
+    await openPanels();
+    global.__onChanged({ panelMinimized: { newValue: true } }, 'sync');
+    expect(global.__LI.getPanelMinimized()).toBe(true);
+    expect(document.getElementById('li-ac-panel-body').style.display).toBe('none');
+
+    global.__onChanged({ foundPanelMinimized: { newValue: true } }, 'sync');
+    expect(global.__LI.getFoundPanelMinimized()).toBe(true);
+    expect(document.getElementById('li-ac-found-body').style.display).toBe('none');
+    expect(document.getElementById('li-ac-found-min').textContent).toBe('+');
+
+    // And back to expanded.
+    global.__onChanged({ panelMinimized: { newValue: false } }, 'sync');
+    expect(document.getElementById('li-ac-panel-body').style.display).toBe('');
+  });
+
+  test('minimize state is honored when a panel is recreated after being closed', async () => {
+    await openPanels();
+    document.getElementById('li-ac-panel-min').click(); // panelMinimized = true
+    document.getElementById('li-ac-panel-close').click(); // panel removed
+    expect(document.getElementById('li-ac-panel')).toBeNull();
+
+    sendMessage({ type: 'FEED_SCAN' }); // panelDismissed=false -> panel recreated
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    const recreated = document.getElementById('li-ac-panel');
+    expect(recreated).not.toBeNull();
+    expect(global.__LI.getPanelMinimized()).toBe(true);
+    expect(recreated.querySelector('#li-ac-panel-body').style.display).toBe('none');
+    expect(recreated.querySelector('#li-ac-panel-min').textContent).toBe('+');
+  });
+
+  test('minimize buttons use the BW monochrome accent style', async () => {
+    await openPanels();
+    const panelBtn = document.getElementById('li-ac-panel-min');
+    const foundBtn = document.getElementById('li-ac-found-min');
+    expect(panelBtn.style.background).toBe('rgb(255, 255, 255)');
+    expect(panelBtn.style.color).toBe('rgb(0, 0, 0)');
+    expect(foundBtn.style.background).toBe('rgb(255, 255, 255)');
+    expect(foundBtn.style.color).toBe('rgb(0, 0, 0)');
+  });
+
+  test('closing minimized panels keeps the existing close/stop behavior', async () => {
+    await openPanels();
+    document.getElementById('li-ac-panel-min').click();
+    document.getElementById('li-ac-found-min').click();
+
+    // Close the control panel first: found panel still in the DOM -> stays.
+    document.getElementById('li-ac-panel-close').click();
+    expect(document.getElementById('li-ac-panel')).toBeNull();
+    expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
+
+    // Close the found panel too: both gone, nothing left to refresh.
+    document.getElementById('li-ac-found-close').click();
+    expect(document.getElementById('li-ac-found-panel')).toBeNull();
+  });
+
+  test('minimized panels stay in the DOM so time-ago refresh keeps updating labels', async () => {
+    await openPanels();
+    const found = document.getElementById('li-ac-found-panel');
+    const row = found.querySelector('[data-kind="em"][data-key]');
+    const ago = row.querySelector('[data-ago]');
+    const before = ago.textContent;
+
+    document.getElementById('li-ac-found-min').click();
+    expect(found.querySelector('#li-ac-found-body').style.display).toBe('none');
+
+    // Advance past the 10s refresh interval; the hidden label still updates
+    // because the minimized panel remains in the DOM.
+    await jest.advanceTimersByTimeAsync(11000);
+    const after = ago.textContent;
+    expect(after).toMatch(/\d+s ago|\d+min ago|\d+h ago/);
+    expect(after).not.toBe(before);
+  });
+
+  test('minimized state is honored when loaded from storage at init', async () => {
+    jest.useFakeTimers();
+    global.chrome.storage.sync.get.mockImplementationOnce((_defaults, callback) => {
+      callback({
+        autoExpand: true,
+        scanEmails: true,
+        includeKeywords: [],
+        excludeKeywords: [],
+        autoScroll: false,
+        debug: true,
+        kwSectionCollapsed: false,
+        autoScrollDurationMin: 0,
+        panelMinimized: true,
+        foundPanelMinimized: true
+      });
+    });
+    let LI;
+    jest.isolateModules(() => {
+      require('../content.js');
+    });
+    LI = globalThis.__LI_AC_TEST__;
+    expect(LI.getPanelMinimized()).toBe(true);
+    expect(LI.getFoundPanelMinimized()).toBe(true);
+
+    makePost('React role one bob@example.com');
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    const panel = document.getElementById('li-ac-panel');
+    const found = document.getElementById('li-ac-found-panel');
+    expect(panel).not.toBeNull();
+    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('none');
+    expect(panel.querySelector('#li-ac-panel-min').textContent).toBe('+');
+    expect(found.querySelector('#li-ac-found-body').style.display).toBe('none');
+    expect(found.querySelector('#li-ac-found-min').textContent).toBe('+');
+
+    // Header still visible -> can expand back.
+    panel.querySelector('#li-ac-panel-min').click();
+    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('');
+    expect(LI.getPanelMinimized()).toBe(false);
+
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: false });
+    LI.cleanup();
+  });
+});

@@ -55,6 +55,84 @@
   // === Safe config field access (H3) ===
   function strArray(v) { return Array.isArray(v) ? v : []; }
 
+  // === URL gate (user requirement): the extension only works on LinkedIn
+  // Search and Feed pages FOR NOW. Everywhere else the floating panels show a
+  // blurred notice instead of scanning. Accepts an optional location-like
+  // object (tests inject new URL(...)) and defaults to window.location.
+  function isAllowedUrl(loc) {
+    const l = loc || (typeof window !== 'undefined' ? window.location : null);
+    if (!l) return false;
+    const host = String(l.hostname || '').toLowerCase();
+    if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) return false;
+    const path = String(l.pathname || '');
+    return path === '/search' || path.startsWith('/search/') ||
+           path === '/feed' || path.startsWith('/feed/');
+  }
+
+  // Semi-transparent + backdrop-blur overlay with a centered notice, added to
+  // BOTH panels whenever the current URL is not a Search/Feed page. Idempotent
+  // per panel; removing it re-enables the normal panel content.
+  function applyGateOverlays() {
+    const gated = !isAllowedUrl();
+    const ids = ['li-ac-panel', 'li-ac-found-panel'];
+    ids.forEach(id => {
+      const p = document.getElementById(id);
+      if (!p) return;
+      const existing = p.querySelector('.li-ac-gate-overlay');
+      if (!gated) {
+        if (existing) existing.remove();
+        return;
+      }
+      if (existing) return; // already showing
+      const header = p.firstElementChild;
+      const top = header && header.offsetHeight ? header.offsetHeight + 'px' : '0px';
+      const ov = document.createElement('div');
+      ov.className = 'li-ac-gate-overlay';
+      ov.style.cssText = 'position:absolute;left:0;right:0;bottom:0;top:' + top + ';z-index:6;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);color:#fff;font:14px/1.5 sans-serif;';
+      ov.innerHTML = '<div><div style="font-size:30px;margin-bottom:8px;">⚠️</div>' +
+        '<div style="font-weight:700;margin-bottom:4px;">Works only on LinkedIn Search &amp; Feed pages</div>' +
+        '<div style="color:#ddd;font-size:12px;">Open <b>linkedin.com/search</b> or<br><b>linkedin.com/feed</b> to use this extension.</div></div>';
+      p.appendChild(ov);
+    });
+  }
+
+  // Render (or keep) both panels in gated/blurred state — no scanning.
+  function renderGatedPanels() {
+    dbg('url gate: not a Search/Feed page — showing blurred notice panels');
+    stopAutoScroll();
+    renderPanel([], []); // renderPanel applies the gate overlays for both panels
+  }
+
+  // Re-evaluate the gate (SPA navigation via history.pushState/popstate or the
+  // 2s monitor). Gated -> notice panels; allowed -> normal scan/rendering.
+  function refreshUrlGate() {
+    if (!isAllowedUrl()) {
+      renderGatedPanels();
+    } else {
+      injectStyles();
+      scanFeed();
+    }
+  }
+
+  let lastGateAllowed = null;
+  let gateCheckInterval = null;
+  function startUrlGateMonitor() {
+    stopUrlGateMonitor();
+    lastGateAllowed = isAllowedUrl();
+    window.addEventListener('popstate', refreshUrlGate);
+    gateCheckInterval = setInterval(() => {
+      const allowed = isAllowedUrl();
+      if (allowed !== lastGateAllowed) {
+        lastGateAllowed = allowed;
+        refreshUrlGate();
+      }
+    }, 2000);
+  }
+  function stopUrlGateMonitor() {
+    if (gateCheckInterval) { clearInterval(gateCheckInterval); gateCheckInterval = null; }
+    window.removeEventListener('popstate', refreshUrlGate);
+  }
+
   // === Hidden-post single source: the .li-ac-hidden class on the element ===
   const HIDDEN_CLS = 'li-ac-hidden';
   const HL_CLS = 'li-ac-kw-hl';
@@ -881,12 +959,16 @@
         if (freshEmails.length) dbg('auto-jumped to', freshEmails.join(', '));
       }
     }
+
+    // URL gate: blur both panels with a centered notice on non-Search/Feed pages.
+    applyGateOverlays();
   }
 
   let scanTimer = null;
   function scanFeed() {
     clearTimeout(scanTimer);
     scanTimer = setTimeout(() => {
+      if (!isAllowedUrl()) { renderGatedPanels(); return; } // URL gate
       let posts = getPosts();
       if (!posts.length) { dbg('scanFeed: no posts'); return; }
       clearKeywordHighlights();
@@ -1070,6 +1152,7 @@
   onMessageListener = (msg, sender, sendResponse) => {
     if (msg.type === 'PING') { sendResponse({ alive: true }); return true; }
     if (msg.type === 'SCAN') {
+      if (!isAllowedUrl()) { sendResponse({ count: 0 }); return true; } // URL gate
       const count = scanButtons();
       if (count > 0) {
         createBadge();
@@ -1083,6 +1166,7 @@
       return true;
     }
     if (msg.type === 'START') {
+      if (!isAllowedUrl()) { sendResponse({ ok: false }); return true; } // URL gate
       if (isRunning) { sendResponse({ ok: true }); return true; } // H1: coalesce repeat STARTs
       if (Number.isFinite(msg.delayMin)) delayMin = Math.max(0, msg.delayMin); // M6 clamp
       if (Number.isFinite(msg.delayMax)) delayMax = Math.max(delayMin, msg.delayMax); // M6
@@ -1136,7 +1220,7 @@
     }
     if (msg.type === 'ADD_KEYWORD_CONTEXT') {
       // Sent by the background script when the user picks the context-menu item.
-      const added = addRightClickedTo(msg.kind === 'exclude' ? 'exclude' : 'include');
+      const added = isAllowedUrl() ? addRightClickedTo(msg.kind === 'exclude' ? 'exclude' : 'include') : 0; // URL gate
       sendResponse({ ok: true, added });
       return true;
     }
@@ -1165,6 +1249,7 @@
       chrome.storage.onChanged.removeListener(onChangedListener);
     }
     if (contextmenuListener) document.removeEventListener('contextmenu', contextmenuListener, true);
+    stopUrlGateMonitor();
     window.removeEventListener('beforeunload', onUnload);
     window.removeEventListener('pagehide', onUnload);
   }
@@ -1194,7 +1279,7 @@
       // timeout, this keeps pinning while the feed is still growing, and releases
       // the moment the user scrolls deliberately.
       try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
-      if (!cfg.autoScroll) {
+      if (!cfg.autoScroll && isAllowedUrl()) {
         // Scroll-pin: pin the viewport to the top while the feed loads, then
         // release on deliberate user scroll or once the feed stabilizes.
         // Handles are stored on the module-scoped winListeners object + releaseFn
@@ -1246,8 +1331,13 @@
       }
       startFeedObserver();
       injectStyles();
-      scanFeed();
-      if (cfg.autoScroll) startAutoScroll();
+      if (isAllowedUrl()) {
+        scanFeed();
+        if (cfg.autoScroll) startAutoScroll();
+      } else {
+        renderGatedPanels(); // URL gate: show blurred notice panels immediately
+      }
+      startUrlGateMonitor(); // SPA nav: re-evaluate on popstate + every 2s
     }
   );
 
@@ -1313,6 +1403,7 @@
     knownEmailsClear: () => knownEmails.clear(),
     knownKeywordKeysAdd: k => knownKeywordKeys.add(k),
     knownKeywordKeysClear: () => knownKeywordKeys.clear(),
+    isAllowedUrl, refreshUrlGate, applyGateOverlays,
     timeAgo, postKey, markViewed, resetHitMeta,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,

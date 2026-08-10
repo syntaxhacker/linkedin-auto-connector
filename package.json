@@ -18,7 +18,10 @@
     ],
     "testMatch": [
       "**/tests/**/*.test.js"
-    ]
+    ],
+    "testEnvironmentOptions": {
+      "url": "https://www.linkedin.com/search/"
+    }
   },
   "devDependencies": {
     "jest": "^29.7.0",

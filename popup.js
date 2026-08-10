@@ -5,6 +5,9 @@ const startBtn = $('btn-start'), searchBtn = $('btn-search'), stopBtn = $('btn-s
 startBtn.disabled = true;
 stopBtn.disabled = true;
 
+let mounted = true;
+window.addEventListener('beforeunload', () => { mounted = false; });
+
 // Status dot: 'idle' (grey) | 'active' (green, pulsing) | 'error' (red)
 function setStatus(state, text) {
   const dot = $('status-dot');
@@ -14,9 +17,11 @@ function setStatus(state, text) {
 
 function send(msg, cb) {
   chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+    if (!mounted) return;
     if (!tabs[0]) { $('log').textContent = '⚠ No active tab'; return; }
     tabUrl = tabs[0].url || '';
     chrome.tabs.sendMessage(tabs[0].id, msg, response => {
+      if (!mounted) return;
       if (chrome.runtime.lastError) {
         const text = tabUrl.includes('linkedin.com')
           ? '⚠ Reload the page (F5) to activate extension.'
@@ -57,6 +62,7 @@ function saveDelay() {
 chrome.storage.sync.get({
   delayMin: 1500, delayMax: 3000
 }, opts => {
+  if (!mounted) return;
   $('delay-min').value = opts.delayMin;
   $('delay-max').value = opts.delayMax;
 });
@@ -110,4 +116,4 @@ $('btn-reset').addEventListener('click', () => {
 });
 
 // Auto-query status on open
-send({ type: 'STATUS' }, updateUI);
+send({ type: 'STATUS' }, resp => { if (!mounted) return; updateUI(resp); });

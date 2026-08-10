@@ -9,6 +9,17 @@
   let isRunning = false;
   let delayMin = 1500, delayMax = 3000;
 
+  // === Teardown handles (LEAK #1/#2/#4/#6/#7) ===
+  // Module-scoped refs captured at attach/init time so teardownPage() and
+  // teardownListeners() can remove them exactly once. Declared up here (before
+  // any assignment site) to avoid TDZ across the init block.
+  let winListeners = { onScroll: null, onUserScroll: null, onKeyScroll: null, resetTimer: null, released: false };
+  let releaseFn = null;
+  let onMessageListener = null;
+  let onChangedListener = null;
+  let contextmenuListener = null;
+  let teardownBound = false;
+
   // === Palette (single source: palette.js, loaded before this file) ===
   const C = LI_PALETTE;
 
@@ -385,6 +396,7 @@
     }
   }
   if (typeof document !== 'undefined') {
+    contextmenuListener = captureRightClick;
     document.addEventListener('contextmenu', captureRightClick, true);
   }
 
@@ -465,9 +477,20 @@
     return h + 'h ago';
   }
 
+  // Bounded to HIT_META_CAP entries (evict oldest by insertion order) so a long
+  // feed-scroll session can't grow the map without limit (LEAK #5).
+  const HIT_META_CAP = 400;
   function ensureMeta(kind, key) {
-    if (!hitMeta.has(kind + ':' + key)) hitMeta.set(kind + ':' + key, { firstSeen: Date.now(), viewed: false });
-    return hitMeta.get(kind + ':' + key);
+    const k = kind + ':' + key;
+    if (hitMeta.has(k)) return hitMeta.get(k);
+    const meta = { firstSeen: Date.now(), viewed: false };
+    hitMeta.set(k, meta);
+    if (hitMeta.size > HIT_META_CAP) {
+      // Map preserves insertion order; drop the oldest entry.
+      const oldest = hitMeta.keys().next().value;
+      hitMeta.delete(oldest);
+    }
+    return meta;
   }
 
   function markViewed(kind, key) {
@@ -985,7 +1008,7 @@
   }
 
   // === Message handler ===
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  onMessageListener = (msg, sender, sendResponse) => {
     if (msg.type === 'PING') { sendResponse({ alive: true }); return true; }
     if (msg.type === 'SCAN') {
       const count = scanButtons();
@@ -1035,6 +1058,7 @@
       knownKeywordKeys.clear();
       resetHitMeta(); // forget viewed/firstSeen
       if (scanTimer) clearTimeout(scanTimer); // L4: don't let a pending scan re-hide
+      teardownPage(); // LEAK #1/#2: stop the scroll-pin interval + remove its window listeners
       chrome.storage.sync.set({ autoScroll: false });
       removeBadge();
       if (panel) { panel.remove(); panel = null; } // full reset clears the panel UI
@@ -1058,7 +1082,44 @@
       return true;
     }
     return true;
-  });
+  };
+  chrome.runtime.onMessage.addListener(onMessageListener);
+
+  // === Teardown (LEAK #1/#2/#4/#6/#7) ===
+  // teardownPage(): session timers + window listeners. Called from RESET (RESET
+  // fully disables the run but must NOT remove chrome/document listeners, which
+  // the extension needs for the rest of the session) and from beforeunload.
+  // teardownListeners(): chrome.* / document listeners — removed only on unload.
+  function teardownPage() {
+    if (releaseFn) releaseFn(); // clears resetTimer + removes the 5 window listeners
+    if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+    stopAutoScroll();
+    stopTimeRefresh();
+    scrollLock.reset();
+    if (feedObserver) { feedObserver.disconnect(); }
+  }
+  function teardownListeners() {
+    if (onMessageListener && chrome.runtime && chrome.runtime.onMessage && typeof chrome.runtime.onMessage.removeListener === 'function') {
+      chrome.runtime.onMessage.removeListener(onMessageListener);
+    }
+    if (onChangedListener && chrome.storage && chrome.storage.onChanged && typeof chrome.storage.onChanged.removeListener === 'function') {
+      chrome.storage.onChanged.removeListener(onChangedListener);
+    }
+    if (contextmenuListener) document.removeEventListener('contextmenu', contextmenuListener, true);
+    window.removeEventListener('beforeunload', onUnload);
+    window.removeEventListener('pagehide', onUnload);
+  }
+  function onUnload() {
+    teardownPage();
+    teardownListeners();
+  }
+  // Register the unload teardown exactly once per instance (page lifecycle only;
+  // never on RESET so the extension keeps handling messages after a reset).
+  if (typeof window !== 'undefined' && !teardownBound) {
+    teardownBound = true;
+    window.addEventListener('beforeunload', onUnload);
+    window.addEventListener('pagehide', onUnload);
+  }
 
   // === Load config + init ===
   chrome.storage.sync.get(
@@ -1073,44 +1134,53 @@
       // the moment the user scrolls deliberately.
       try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
       if (!cfg.autoScroll) {
-        let released = false;
-        const release = () => {
-          if (released) return;
-          released = true;
-          clearInterval(resetTimer);
-          window.removeEventListener('scroll', onScroll, true);
-          window.removeEventListener('wheel', onUserScroll, true);
-          window.removeEventListener('touchstart', onUserScroll, true);
-          window.removeEventListener('pointerdown', onUserScroll, true);
-          window.removeEventListener('keydown', onKeyScroll, true);
+        // Scroll-pin: pin the viewport to the top while the feed loads, then
+        // release on deliberate user scroll or once the feed stabilizes.
+        // Handles are stored on the module-scoped winListeners object + releaseFn
+        // so teardownPage() (RESET + beforeunload) can remove them (LEAK #1/#2).
+        winListeners.released = false;
+        releaseFn = function releasePin() {
+          if (winListeners.released) return;
+          winListeners.released = true;
+          if (winListeners.resetTimer) { clearInterval(winListeners.resetTimer); winListeners.resetTimer = null; }
+          const us = winListeners.onUserScroll;
+          if (us) {
+            window.removeEventListener('wheel', us, true);
+            window.removeEventListener('touchstart', us, true);
+            window.removeEventListener('pointerdown', us, true);
+          }
+          if (winListeners.onKeyScroll) window.removeEventListener('keydown', winListeners.onKeyScroll, true);
+          if (winListeners.onScroll) window.removeEventListener('scroll', winListeners.onScroll, true);
         };
         const els = () => [document.querySelector('main'), document.scrollingElement, document.documentElement, document.body];
         const resetAll = () => {
-          if (cfg.autoScroll) { release(); return; } // M3: toggling auto-scroll on hands over control
+          if (cfg.autoScroll) { releaseFn(); return; } // M3: toggling auto-scroll on hands over control
           els().forEach(el => { if (el && el.scrollTop !== 0) el.scrollTop = 0; });
         };
         resetAll();
         // Any deliberate user scroll (wheel, touch, click, scroll keys) hands control back.
-        const onUserScroll = () => release();
-        const onKeyScroll = e => {
+        winListeners.onUserScroll = () => releaseFn();
+        winListeners.onKeyScroll = e => {
           if (e.target && e.target.matches && e.target.matches('input, textarea')) return; // M3: typing in panel inputs
-          if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(e.key)) release();
+          if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(e.key)) releaseFn();
         };
-        const onScroll = () => { if (!released) resetAll(); };
-        window.addEventListener('scroll', onScroll, true);
-        window.addEventListener('wheel', onUserScroll, true);
-        window.addEventListener('touchstart', onUserScroll, true);
-        window.addEventListener('pointerdown', onUserScroll, true);
-        window.addEventListener('keydown', onKeyScroll, true);
+        winListeners.onScroll = () => { if (!winListeners.released) resetAll(); };
+        window.addEventListener('scroll', winListeners.onScroll, true);
+        window.addEventListener('wheel', winListeners.onUserScroll, true);
+        window.addEventListener('touchstart', winListeners.onUserScroll, true);
+        window.addEventListener('pointerdown', winListeners.onUserScroll, true);
+        window.addEventListener('keydown', winListeners.onKeyScroll, true);
         let lastHeight = 0, stableTicks = 0;
-        const resetTimer = setInterval(() => {
+        winListeners.resetTimer = setInterval(() => {
           resetAll();
           // Release once the feed stops growing for ~6s (content finished loading).
           const h = (document.querySelector('main') || document.documentElement).scrollHeight || 0;
           if (h === lastHeight) {
-            if (++stableTicks > 12) release(); // ~6s stable
+            if (++stableTicks > 12) releaseFn(); // ~6s stable
           } else { stableTicks = 0; lastHeight = h; }
-          if (released) clearInterval(resetTimer);
+          if (winListeners.released) {
+            if (winListeners.resetTimer) { clearInterval(winListeners.resetTimer); winListeners.resetTimer = null; }
+          }
         }, 500);
       }
       startFeedObserver();
@@ -1120,7 +1190,7 @@
     }
   );
 
-  chrome.storage.onChanged.addListener((changes, area) => {
+  onChangedListener = (changes, area) => {
     if (area !== 'sync') return;
     ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin'].forEach(k => {
       // H3: a removed key reports {oldValue} with no newValue — don't write
@@ -1152,8 +1222,12 @@
       cfg.revealAll = false; // keywords changed → re-apply filtering
       restoreHidden(); // posts no longer matching come back, then re-filter
     }
-    scanFeed();
-  });
+    // L4: only re-scan when a field that affects scanning actually changed,
+    // otherwise an unrelated storage write (e.g. debug) needlessly re-scans.
+    const scanKeys = ['autoScroll', 'includeKeywords', 'excludeKeywords', 'revealAll', 'autoExpand', 'scanEmails'];
+    if (scanKeys.some(k => changes[k])) scanFeed();
+  };
+  chrome.storage.onChanged.addListener(onChangedListener);
 
   // === Test-only surface ===
   // Content scripts run in an isolated world, so attaching this to globalThis
@@ -1178,7 +1252,11 @@
     getCfg: () => cfg,
     setCfg: o => { cfg = Object.assign({}, cfg, o); },
     getCounts: () => ({ connected, skipped, failed }),
-    cleanup: () => { stopAutoScroll(); stopTimeRefresh(); scrollLock.reset(); if (scanTimer) clearTimeout(scanTimer); if (feedObserver) feedObserver.disconnect(); }
+    // teardownPage() is a superset of the previous manual cleanup (stops
+    // auto-scroll/time-refresh, resets scrollLock, clears scanTimer, disconnects
+    // the feed observer) and additionally tears down the scroll-pin interval +
+    // its window listeners so tests stop leaking OpenHandles / timer handles.
+    cleanup: () => { teardownPage(); }
   };
   if (typeof globalThis !== 'undefined') {
     globalThis.__LI_AC_TEST__ = testSurface;

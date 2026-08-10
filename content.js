@@ -612,6 +612,43 @@
   }
   function toggleKwSection() { return setKwSectionCollapsed(!kwSectionCollapsed); }
 
+  // Collapse state for each floating panel: minimizing hides the panel BODY
+  // (everything under the header) while keeping the header visible so the
+  // panel can be expanded again. Independent per panel; persisted like
+  // kwSectionCollapsed and re-applied on every renderPanel pass.
+  let panelMinimized = false;
+  let foundPanelMinimized = false;
+  function getPanelMinimized() { return panelMinimized; }
+  function getFoundPanelMinimized() { return foundPanelMinimized; }
+  function applyPanelMinimized(panelEl) {
+    if (!panelEl) return;
+    const body = panelEl.querySelector('#li-ac-panel-body');
+    const btn = panelEl.querySelector('#li-ac-panel-min');
+    if (body) body.style.display = panelMinimized ? 'none' : '';
+    if (btn) btn.textContent = panelMinimized ? '+' : '\u2013';
+  }
+  function applyFoundPanelMinimized(panelEl) {
+    if (!panelEl) return;
+    const body = panelEl.querySelector('#li-ac-found-body');
+    const btn = panelEl.querySelector('#li-ac-found-min');
+    if (body) body.style.display = foundPanelMinimized ? 'none' : '';
+    if (btn) btn.textContent = foundPanelMinimized ? '+' : '\u2013';
+  }
+  function setPanelMinimized(v) {
+    panelMinimized = !!v;
+    chrome.storage.sync.set({ panelMinimized });
+    if (panel) applyPanelMinimized(panel);
+    return panelMinimized;
+  }
+  function setFoundPanelMinimized(v) {
+    foundPanelMinimized = !!v;
+    chrome.storage.sync.set({ foundPanelMinimized });
+    if (foundPanel) applyFoundPanelMinimized(foundPanel);
+    return foundPanelMinimized;
+  }
+  function togglePanelMinimize() { return setPanelMinimized(!panelMinimized); }
+  function toggleFoundPanelMinimize() { return setFoundPanelMinimized(!foundPanelMinimized); }
+
   // Build one panel row for a keyword/email hit: headline, snippet, time-ago,
   // and a ✓ badge once viewed.
   function hitRowHtml(hit, i, kind) {
@@ -639,7 +676,8 @@
       panel.id = 'li-ac-panel';
       panel.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:320px;max-height:78vh;overflow:auto;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
       panel.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔗 LI Auto</span><button id="li-ac-panel-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔗 LI Auto</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-panel-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-panel-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
+        '<div id="li-ac-panel-body">' +
         '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
           '<input type="checkbox" id="li-ac-autoscroll" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.autoScroll ? ' checked' : '') + '>' +
           '<label for="li-ac-autoscroll" style="cursor:pointer;">Auto-scroll to new posts</label>' +
@@ -664,6 +702,7 @@
           '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Exclude keywords</div>' +
           '<input id="li-ac-kw-exclude" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder=".net, java, php · press Enter to add">' +
           '<div id="li-ac-tags-exclude" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;"></div>' +
+        '</div>' +
         '</div>';
       document.body.appendChild(panel);
       panel.querySelector('#li-ac-panel-close').addEventListener('click', () => {
@@ -709,7 +748,9 @@
       kwIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitKwInputs(); } });
       kwEx.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitKwInputs(); } });
       panel.querySelector('#li-ac-kw-collapse').addEventListener('click', () => toggleKwSection());
+      panel.querySelector('#li-ac-panel-min').addEventListener('click', () => togglePanelMinimize());
       applyKwSection(panel);
+      applyPanelMinimized(panel);
     }
 
     // === Found panel (immediately left of the control panel) ===
@@ -718,7 +759,8 @@
       foundPanel.id = 'li-ac-found-panel';
       foundPanel.style.cssText = 'position:fixed;bottom:16px;right:348px;z-index:999999;width:320px;max-height:90vh;display:flex;flex-direction:column;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
       foundPanel.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><button id="li-ac-found-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-found-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-found-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
+        '<div id="li-ac-found-body" style="display:flex;flex-direction:column;flex:1 1 0;min-height:0;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
           '<span>🔑 Keywords found</span>' +
           '<span id="li-ac-kw-sortbar" style="display:flex;gap:4px;">' +
@@ -736,13 +778,16 @@
             '<button id="li-ac-em-down" data-list-nav="em" data-dir="1" title="Next email" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↓</button>' +
           '</span>' +
         '</div>' +
-        '<div id="li-ac-panel-list" style="flex:1 1 0;min-height:38vh;overflow-y:auto;padding:6px 8px;"></div>';
+        '<div id="li-ac-panel-list" style="flex:1 1 0;min-height:38vh;overflow-y:auto;padding:6px 8px;"></div>' +
+        '</div>';
     document.body.appendChild(foundPanel);
     foundPanel.querySelector('#li-ac-found-close').addEventListener('click', () => {
       foundPanelDismissed = true;
       if (foundPanel) { foundPanel.remove(); foundPanel = null; }
       if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); }
     });
+    foundPanel.querySelector('#li-ac-found-min').addEventListener('click', () => toggleFoundPanelMinimize());
+    applyFoundPanelMinimized(foundPanel);
   }
 
   startTimeRefresh();
@@ -772,6 +817,7 @@
       if (toggle) toggle.checked = !!cfg.autoScroll;
       renderTags(panel);
       applyKwSection(panel);
+      applyPanelMinimized(panel);
       const hiddenCountEl = panel.querySelector('#li-ac-hidden-count');
       if (hiddenCountEl) hiddenCountEl.textContent = '🙈 Hidden: ' + getHiddenCount();
     }
@@ -794,6 +840,7 @@
       } else {
         list.innerHTML = emSorted.map((hit, i) => hitRowHtml(hit, i, 'em')).join('');
       }
+      applyFoundPanelMinimized(foundPanel);
     }
 
     // Auto-scroll: when enabled, jump to a NEWLY discovered email/keyword post.
@@ -1135,10 +1182,12 @@
 
   // === Load config + init ===
   chrome.storage.sync.get(
-    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0 },
+    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false },
     opts => {
       cfg = opts;
       kwSectionCollapsed = !!opts.kwSectionCollapsed;
+      panelMinimized = !!opts.panelMinimized;
+      foundPanelMinimized = !!opts.foundPanelMinimized;
       autoScrollDurationMin = Math.max(0, Math.floor(Number(opts.autoScrollDurationMin) || 0));
       // Don't let the browser/LinkedIn restore a previous scroll position on load;
       // start at top unless auto-scroll is explicitly enabled. Unlike a fixed
@@ -1213,6 +1262,14 @@
       kwSectionCollapsed = !!changes.kwSectionCollapsed.newValue;
       if (panel) applyKwSection(panel);
     }
+    if (changes.panelMinimized) {
+      panelMinimized = !!changes.panelMinimized.newValue;
+      if (panel) applyPanelMinimized(panel);
+    }
+    if (changes.foundPanelMinimized) {
+      foundPanelMinimized = !!changes.foundPanelMinimized.newValue;
+      if (foundPanel) applyFoundPanelMinimized(foundPanel);
+    }
     if (changes.autoScrollDurationMin) {
       autoScrollDurationMin = Math.max(0, Math.floor(Number(changes.autoScrollDurationMin.newValue) || 0));
       if (panel) {
@@ -1258,6 +1315,8 @@
     knownKeywordKeysClear: () => knownKeywordKeys.clear(),
     timeAgo, postKey, markViewed, resetHitMeta,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
+    getPanelMinimized, setPanelMinimized, togglePanelMinimize,
+    getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,
     hitMeta: () => hitMeta,
     getPanel: () => document.getElementById('li-ac-panel'),
     getFoundPanel: () => document.getElementById('li-ac-found-panel'),

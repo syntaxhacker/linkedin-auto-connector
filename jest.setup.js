@@ -57,7 +57,9 @@ const STORAGE_DEFAULTS = {
   includeKeywords: [],
   excludeKeywords: [],
   autoScroll: true,
-  debug: true
+  debug: true,
+  panelMinimized: false,
+  foundPanelMinimized: false
 };
 
 global.chrome = {

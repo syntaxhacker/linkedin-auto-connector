@@ -247,7 +247,8 @@ describe('keyword tags (closable chips)', () => {
     inc.value = 'typescript';
     inc.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 
-    expect(global.__LI.getCfg().includeKeywords).toEqual(['react', 'python', 'typescript']);
+    // Newest-first: the keyword added LAST sits at the FRONT of the list.
+    expect(global.__LI.getCfg().includeKeywords).toEqual(['typescript', 'react', 'python']);
     expect(global.__LI.getCfg().excludeKeywords).toEqual(['.net']);
 
     // Tags reflect the merged set.

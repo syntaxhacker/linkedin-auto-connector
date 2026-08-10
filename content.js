@@ -405,7 +405,7 @@
     const kws = extractKeywordsFromPost(rightClickedPost);
     if (!kws.length) return 0;
     const key = kind === 'exclude' ? 'excludeKeywords' : 'includeKeywords';
-    cfg[key] = Array.from(new Set(strArray(cfg[key]).concat(kws)));
+    cfg[key] = Array.from(new Set(kws.concat(strArray(cfg[key])))); // newest-first (context-add)
     cfg.revealAll = false; // keywords changed → re-apply filtering
     chrome.storage.sync.set({ [key]: cfg[key] });
     dbg('context-add to ' + key + ':', kws.join(', '));
@@ -530,6 +530,14 @@
     });
     rows[idx].scrollIntoView({ block: 'nearest' });
     if (rows[idx].focus) rows[idx].focus({ preventScroll: true });
+  }
+  // Hide a Found-panel section's sort/↑/↓ button bar when its hit list is
+  // empty (no rows to navigate or newest-sort); show it again when hits exist.
+  // Driven from the render path (renderPanel re-renders every scan). Buttons
+  // stay wired; navList/toggleSort already guard missing rows/elements.
+  function setSectionBarVisible(kind, hasHits) {
+    const bar = document.getElementById(kind === 'kw' ? 'li-ac-kw-sortbar' : 'li-ac-em-sortbar');
+    if (bar) bar.style.display = hasHits ? 'flex' : 'none';
   }
   function toggleSort(kind) {
     sortNewest[kind] = !sortNewest[kind];
@@ -685,7 +693,7 @@
       const kwIn = panel.querySelector('#li-ac-kw-include');
       const kwEx = panel.querySelector('#li-ac-kw-exclude');
       const split = v => v.split(/[\n,]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
-      const merge = (cur, add) => Array.from(new Set(strArray(cur).concat(split(add))));
+      const merge = (cur, add) => Array.from(new Set(split(add).concat(strArray(cur)))); // newest-first
       function commitKwInputs() {
         cfg.includeKeywords = merge(cfg.includeKeywords, kwIn.value);
         cfg.excludeKeywords = merge(cfg.excludeKeywords, kwEx.value);
@@ -713,7 +721,7 @@
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><button id="li-ac-found-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></div>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
           '<span>🔑 Keywords found</span>' +
-          '<span style="display:flex;gap:4px;">' +
+          '<span id="li-ac-kw-sortbar" style="display:flex;gap:4px;">' +
             '<button id="li-ac-kw-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
             '<button id="li-ac-kw-up" data-list-nav="kw" data-dir="-1" title="Previous keyword" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↑</button>' +
             '<button id="li-ac-kw-down" data-list-nav="kw" data-dir="1" title="Next keyword" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↓</button>' +
@@ -722,7 +730,7 @@
         '<div id="li-ac-kw-list" style="flex:1 1 0;min-height:38vh;overflow-y:auto;padding:5px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
           '<span>📧 Emails found</span>' +
-          '<span style="display:flex;gap:4px;">' +
+          '<span id="li-ac-em-sortbar" style="display:flex;gap:4px;">' +
             '<button id="li-ac-em-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
             '<button id="li-ac-em-up" data-list-nav="em" data-dir="-1" title="Previous email" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↑</button>' +
             '<button id="li-ac-em-down" data-list-nav="em" data-dir="1" title="Next email" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↓</button>' +
@@ -770,6 +778,8 @@
     if (foundPanel) {
       const kwList = foundPanel.querySelector('#li-ac-kw-list');
       const kwSorted = sortedHits('kw');
+      // Hide the section's sort/↑/↓ bar when its hit list is empty.
+      setSectionBarVisible('kw', kwSorted.length > 0);
       if (!kwSorted.length) {
         kwList.innerHTML = '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:13px;">No keyword matches</div>';
       } else {
@@ -777,6 +787,8 @@
       }
       const list = foundPanel.querySelector('#li-ac-panel-list');
       const emSorted = sortedHits('em');
+      // Hide the section's sort/↑/↓ bar when its hit list is empty.
+      setSectionBarVisible('em', emSorted.length > 0);
       if (!emSorted.length) {
         list.innerHTML = '<div style="color:' + BW.muted + ';padding:8px;font-size:13px;">No emails found</div>';
       } else {
@@ -1245,7 +1257,7 @@
     knownKeywordKeysAdd: k => knownKeywordKeys.add(k),
     knownKeywordKeysClear: () => knownKeywordKeys.clear(),
     timeAgo, postKey, markViewed, resetHitMeta,
-    sortedHits, sortNewest, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
+    sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     hitMeta: () => hitMeta,
     getPanel: () => document.getElementById('li-ac-panel'),
     getFoundPanel: () => document.getElementById('li-ac-found-panel'),

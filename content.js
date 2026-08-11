@@ -36,7 +36,7 @@
   };
 
   // === Feed scanner config ===
-  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, debug: true };
+  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true };
 
   // === Debug logging (gated by cfg.debug) ===
   function dbg() {
@@ -138,6 +138,18 @@
   // === Hidden-post single source: the .li-ac-hidden class on the element ===
   const HIDDEN_CLS = 'li-ac-hidden';
   const HL_CLS = 'li-ac-kw-hl';
+  // Collapses the whole feed card (post + its comment section). LinkedIn
+  // renders the comment thread as a SIBLING of the post inside the card
+  // wrapper, so collapsing only the post element would leave the comments
+  // visible. The card gets its own class so hidden-count/hidden-state stay
+  // keyed on the post element (.li-ac-hidden) alone.
+  const HIDDEN_CARD_CLS = 'li-ac-hidden-card';
+  // Ultra Hide mode: collapses every post that is NOT an include-keyword match
+  // or an email match, exactly like exclude-hidden posts — but under its own
+  // class so those posts stay out of the Hidden list (which tracks only
+  // exclude-keyword posts). Same card-collapse trick for the comment thread.
+  const ULTRA_CLS = 'li-ac-ultra';
+  const ULTRA_CARD_CLS = 'li-ac-ultra-card';
 
   function getHiddenPosts() {
     return Array.prototype.slice.call(document.querySelectorAll('.' + HIDDEN_CLS));
@@ -146,8 +158,73 @@
   function restoreHidden() {
     const hidden = getHiddenPosts();
     hidden.forEach(el => el.classList.remove(HIDDEN_CLS));
+    // Reveal the wrapped cards too (comment sections).
+    Array.prototype.slice.call(document.querySelectorAll('.' + HIDDEN_CARD_CLS)).forEach(el => el.classList.remove(HIDDEN_CARD_CLS));
+    revealedHiddenKeys.clear();
     if (hidden.length) dbg('restoreHidden: revealed', hidden.length, 'post(s)');
     return hidden.length;
+  }
+
+  // Per-post hide/unhide from the Found panel's Hidden list. A post hidden by an
+  // exclude keyword gets .li-ac-hidden (+ its card .li-ac-hidden-card). Clicking
+  // "Show" in the Hidden list reveals that one post and remembers its key so the
+  // next filterPosts pass doesn't immediately re-hide it; "Hide" reverses it.
+  const revealedHiddenKeys = new Set();
+  // Why was this post hidden? Stored on the element when filterPosts hides it
+  // so the Hidden list can show the matching exclude keyword. Recomputes on the
+  // fly for revealed-but-still-excluded rows.
+  function hiddenReason(el) {
+    const stored = el && el.getAttribute('data-hidden-reason');
+    if (stored) return stored;
+    if (!el) return '';
+    const t = postBodyText(el).toLowerCase();
+    return (strArray(cfg.excludeKeywords).find(k => kwMatch(t, k))) || '';
+  }
+  function revealHiddenPost(el) {
+    const key = postKey(el);
+    el.classList.remove(HIDDEN_CLS);
+    const card = el.closest('[role="listitem"]');
+    if (card && card !== el) card.classList.remove(HIDDEN_CARD_CLS);
+    revealedHiddenKeys.add(key);
+    dbg('revealed hidden post:', key.slice(0, 40));
+  }
+  function rehidePost(el) {
+    const key = postKey(el);
+    el.classList.add(HIDDEN_CLS);
+    el.setAttribute('data-hidden-reason', hiddenReason(el));
+    const card = el.closest('[role="listitem"]');
+    if (card && card !== el) card.classList.add(HIDDEN_CARD_CLS);
+    revealedHiddenKeys.delete(key);
+    dbg('re-hid post:', key.slice(0, 40));
+  }
+
+  // Ultra Hide mode: collapse every post except include-keyword matches and
+  // email matches (and posts the user manually revealed). Applies to the whole
+  // feed each scan, so newly-loaded posts are handled too. Off → strips classes.
+  function applyUltraHide(kwHits, emHits) {
+    const posts = getPosts();
+    if (!cfg.ultraHide) {
+      posts.forEach(p => {
+        p.classList.remove(ULTRA_CLS);
+        const card = p.closest('[role="listitem"]');
+        if (card && card !== p) card.classList.remove(ULTRA_CARD_CLS);
+      });
+      return;
+    }
+    const hitKeys = new Set();
+    (kwHits || []).concat(emHits || []).forEach(h => hitKeys.add(h.key));
+    posts.forEach(p => {
+      const key = postKey(p);
+      const keep = hitKeys.has(key) || revealedHiddenKeys.has(key);
+      const card = p.closest('[role="listitem"]');
+      if (keep) {
+        p.classList.remove(ULTRA_CLS);
+        if (card && card !== p) card.classList.remove(ULTRA_CARD_CLS);
+      } else {
+        p.classList.add(ULTRA_CLS);
+        if (card && card !== p) card.classList.add(ULTRA_CARD_CLS);
+      }
+    });
   }
 
   // === Inject styles once (hover-to-expand hidden posts + keyword highlight) ===
@@ -158,6 +235,12 @@
     style.textContent =
       '.' + HIDDEN_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
       '.' + HIDDEN_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
+      '.' + HIDDEN_CARD_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
+      '.' + HIDDEN_CARD_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
+      '.' + ULTRA_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
+      '.' + ULTRA_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
+      '.' + ULTRA_CARD_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
+      '.' + ULTRA_CARD_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
       '.' + HL_CLS + ' { outline: 3px solid ' + C.warn + '; outline-offset: 2px; box-shadow: 0 0 12px rgba(251,191,36,.5); transition: all 0.3s; }';
     document.head.appendChild(style);
   }
@@ -389,17 +472,22 @@
   }
 
   function filterPosts(posts) {
-    if (cfg.revealAll) { dbg('filterPosts: revealAll active, skipping'); return 0; }
     let hidden = 0;
     const excludes = strArray(cfg.excludeKeywords);
     posts.forEach(p => {
       if (p.classList.contains(HIDDEN_CLS)) return; // already hidden — no double work
-      const t = (p.textContent || '').toLowerCase();
+      if (revealedHiddenKeys.has(postKey(p))) return; // user explicitly revealed it
+      const t = postBodyText(p).toLowerCase();
       // Exclude: substring match (".net" must catch "ASP.NET", ".NET Core", etc.)
       const matched = excludes.find(k => kwMatch(t, k));
       // Include keywords never hide posts — they only highlight (scanKeywords).
       if (matched !== undefined) {
         p.classList.add(HIDDEN_CLS);
+        p.setAttribute('data-hidden-reason', matched);
+        // LinkedIn renders the comment thread as a sibling of the post inside
+        // the card wrapper — collapse the whole card so comments hide too.
+        const card = p.closest('[role="listitem"]');
+        if (card && card !== p) card.classList.add(HIDDEN_CARD_CLS);
         hidden++;
         dbg('hidden post (excluded by "' + matched + '"):', t.slice(0, 60));
       }
@@ -411,7 +499,7 @@
   function scanEmails(posts) {
     const hits = [];
     posts.forEach(p => {
-      const raw = p.textContent || '';
+      const raw = postBodyText(p);
       const found = [];
       let m;
       EMAIL_RE.lastIndex = 0;
@@ -434,7 +522,7 @@
     const includes = strArray(cfg.includeKeywords);
     if (!includes.length) return hits;
     posts.forEach(p => {
-      const t = (p.textContent || '').toLowerCase();
+      const t = postBodyText(p).toLowerCase();
       const matched = includes.filter(k => wordMatch(t, k));
       if (matched.length) {
         const key = postKey(p);
@@ -451,7 +539,7 @@
   // Small stopword list so we extract meaningful tokens, not filler.
   const STOPWORDS = new Set('a,an,the,and,or,but,if,then,else,for,to,of,in,on,at,by,with,from,is,are,was,were,be,been,being,have,has,had,do,does,did,will,would,can,could,should,may,might,must,this,that,these,those,it,its,as,so,than,too,very,just,not,no,yes,also,only,into,out,over,under,up,down,all,any,both,each,few,more,most,other,some,such,about,after,before,between,our,their,your,my,we,us,them,they,he,she,him,her,i,you,what,which,who,whom,when,where,why,how,get,got,make,made,like,look,need,want,work,works,working,join,team,role,post,feed,please,share,click,open,read,check,see,use,using,build,building,developer,engineer,hiring,looking,great,new,good'.split(','));
   function extractKeywordsFromPost(el) {
-    const raw = String((el && el.textContent) || '').toLowerCase();
+    const raw = postBodyText(el).toLowerCase();
     const tokens = raw.match(/[a-z][a-z0-9+#.-]{2,}/g) || [];
     const counts = new Map();
     tokens.forEach(t => {
@@ -486,7 +574,6 @@
     if (!kws.length) return 0;
     const key = kind === 'exclude' ? 'excludeKeywords' : 'includeKeywords';
     cfg[key] = Array.from(new Set(kws.concat(strArray(cfg[key])))); // newest-first (context-add)
-    cfg.revealAll = false; // keywords changed → re-apply filtering
     chrome.storage.sync.set({ [key]: cfg[key] });
     dbg('context-add to ' + key + ':', kws.join(', '));
     restoreHidden();
@@ -514,7 +601,6 @@
     const key = kind === 'exclude' ? 'excludeKeywords' : 'includeKeywords';
     const next = strArray(cfg[key]).filter(k => k !== kw);
     cfg[key] = next;
-    cfg.revealAll = false; // keywords changed → re-apply filtering
     chrome.storage.sync.set({ [key]: next });
     dbg('removed keyword "' + kw + '" from ' + key + '; re-scanning');
     if (kind === 'exclude') restoreHidden(); // posts no longer matching come back
@@ -546,6 +632,19 @@
 
   function postKey(el) {
     return ((el && el.textContent) || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  }
+
+  // The post's own body text: only the direct <p> children of the post card.
+  // The card also contains the author's profile headline, "likes this" rows,
+  // reaction counts, and action buttons — reading those would match keywords
+  // found only in the author's profile. No <p> (widgets, commentary-less shared
+  // cards) → '' so they never match.
+  function postBodyText(el) {
+    if (!el) return '';
+    return Array.from(el.children)
+      .filter(c => c.tagName === 'P')
+      .map(c => c.textContent || '')
+      .join('\n');
   }
 
   function timeAgo(ms) {
@@ -581,8 +680,8 @@
 
   function resetHitMeta() { hitMeta.clear(); }
 
-  // Sort toggle state for the found lists (newest-discovered first).
-  const sortNewest = { kw: false, em: false };
+  // Sort toggle state for the found lists (newest-discovered first by default).
+  const sortNewest = { kw: true, em: true };
   function sortedHits(kind) {
     const arr = kind === 'kw' ? kwPanelData : panelData;
     if (!sortNewest[kind]) return arr;
@@ -593,28 +692,9 @@
     });
   }
 
-  // === Shared nav/sort helpers (module scope so they persist across re-scans) ===
-  const navState = { kw: -1, em: -1 };
-  function navList(kind, dir) {
-    const el = kind === 'kw' ? document.getElementById('li-ac-kw-list') : document.getElementById('li-ac-panel-list');
-    const container = el || foundPanel || document.body;
-    if (!container) return;
-    const rows = Array.prototype.slice.call(container.querySelectorAll('[data-idx]'));
-    if (!rows.length) return;
-    let idx = navState[kind] + dir;
-    if (idx < 0) idx = rows.length - 1;
-    if (idx >= rows.length) idx = 0;
-    navState[kind] = idx;
-    rows.forEach((r, i) => {
-      r.style.background = i === idx ? 'rgba(255,255,255,.15)' : '';
-    });
-    rows[idx].scrollIntoView({ block: 'nearest' });
-    if (rows[idx].focus) rows[idx].focus({ preventScroll: true });
-  }
-  // Hide a Found-panel section's sort/↑/↓ button bar when its hit list is
-  // empty (no rows to navigate or newest-sort); show it again when hits exist.
-  // Driven from the render path (renderPanel re-renders every scan). Buttons
-  // stay wired; navList/toggleSort already guard missing rows/elements.
+  // Hide a Found-panel section's sort button bar when its hit list is empty;
+  // show it again when hits exist. Driven from the render path (renderPanel
+  // re-renders every scan). toggleSort already guards missing elements.
   function setSectionBarVisible(kind, hasHits) {
     const bar = document.getElementById(kind === 'kw' ? 'li-ac-kw-sortbar' : 'li-ac-em-sortbar');
     if (bar) bar.style.display = hasHits ? 'flex' : 'none';
@@ -623,14 +703,53 @@
     sortNewest[kind] = !sortNewest[kind];
     const btn = document.getElementById(kind === 'kw' ? 'li-ac-kw-sort' : 'li-ac-em-sort');
     if (btn) btn.style.background = sortNewest[kind] ? BW.fg : BW.accentBg;
-    navState[kind] = -1;
     scanFeed();
+  }
+  // Reflect the current sort state on the Newest button (active = newest-first,
+  // which is the default) whenever the panel is (re)rendered.
+  function applySortButtons(foundPanelEl) {
+    if (!foundPanelEl) return;
+    const setBtn = (id, kind) => {
+      const btn = foundPanelEl.querySelector(id);
+      if (btn) btn.style.background = sortNewest[kind] ? BW.fg : BW.accentBg;
+    };
+    setBtn('#li-ac-kw-sort', 'kw');
+    setBtn('#li-ac-em-sort', 'em');
   }
   function wirePanel(root) {
     root.addEventListener('click', e => {
-      const navBtn = e.target.closest('[data-list-nav]');
-      if (navBtn) {
-        navList(navBtn.getAttribute('data-list-nav'), parseInt(navBtn.getAttribute('data-dir'), 10));
+      const hideBtn = e.target.closest('[data-hidden-toggle]');
+      if (hideBtn) {
+        const action = hideBtn.getAttribute('data-hidden-toggle');
+        const row = hideBtn.closest('[data-hidden-key]');
+        const key = row ? row.getAttribute('data-hidden-key') : hideBtn.getAttribute('data-hidden-key');
+        const el = [...getHiddenPosts(), ...getPosts()].find(p => postKey(p) === key);
+        if (el) {
+          if (action === 'show') revealHiddenPost(el);
+          else rehidePost(el);
+          // Show/Hide only toggles visibility — no need to re-filter or re-scan
+          // the feed. Re-render the panels with the already-scanned data, and
+          // keep Ultra Hide state consistent (revealed posts stay expanded).
+          renderPanel(panelData, kwPanelData);
+          applyUltraHide(kwPanelData, panelData);
+        }
+        return;
+      }
+      // Clicking anywhere else on a hidden-post row scrolls to that post in the
+      // feed (same behavior as keyword/email rows).
+      const hiddenRow = e.target.closest('[data-hidden-key]');
+      if (hiddenRow) {
+        const key = hiddenRow.getAttribute('data-hidden-key');
+        const el = [...getHiddenPosts(), ...getPosts()].find(p => postKey(p) === key);
+        if (el && el.isConnected) {
+          disableAutoScroll();
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const oldOutline = el.style.outline;
+          const oldShadow = el.style.boxShadow;
+          el.style.outline = '3px solid ' + C.dustyDenim;
+          el.style.boxShadow = '0 0 20px ' + C.dustyDenim + 'aa';
+          setTimeout(() => { el.style.outline = oldOutline; el.style.boxShadow = oldShadow; }, 2000);
+        }
         return;
       }
       const removeBtn = e.target.closest('[data-kw-remove]');
@@ -741,8 +860,26 @@
     const headline = kind === 'kw' ? hit.keywords.map(escHtml).join(', ') : hit.emails.map(escHtml).join('<br>');
     return '<div data-idx="' + i + '" data-kind="' + kind + '" data-key="' + escHtml(hit.key) + '" style="' + rowStyle + '">' +
       '<div style="color:' + BW.fg + ';font-size:14px;word-break:break-all;">' + headline + badge + '</div>' +
-      '<div style="color:' + BW.muted + ';font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + dim + '">' + escHtml((hit.el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70)) + '</div>' +
+      '<div style="color:' + BW.muted + ';font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + dim + '">' + escHtml((postBodyText(hit.el) || '').replace(/\s+/g, ' ').trim().slice(0, 70)) + '</div>' +
       '<div data-ago style="color:' + BW.muted + ';opacity:.8;font-size:11px;">' + timeAgo(meta.firstSeen) + '</div>' +
+    '</div>';
+  }
+
+  // Build one row for a hidden post in the Found panel's Hidden list: snippet,
+  // the exclude keyword that hid it, and a Show/Hide toggle.
+  function hiddenRowHtml(el, i, revealed) {
+    const key = postKey(el);
+    const snippet = escHtml((postBodyText(el) || '').replace(/\s+/g, ' ').trim().slice(0, 70));
+    const reason = escHtml(hiddenReason(el));
+    const btn = revealed
+      ? '<button data-hidden-toggle="hide" title="Hide this post again" style="flex:none;padding:2px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Hide</button>'
+      : '<button data-hidden-toggle="show" title="Show this post" style="flex:none;padding:2px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Show</button>';
+    return '<div data-hidden-idx="' + i + '" data-hidden-key="' + escHtml(key) + '" style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid ' + BW.border + ';">' +
+      '<div style="flex:1 1 auto;min-width:0;">' +
+        '<div style="color:' + BW.muted + ';font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + snippet + '</div>' +
+        '<div style="color:' + C.warn + ';font-size:10px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⛔ excluded: ' + reason + '</div>' +
+      '</div>' +
+      btn +
     '</div>';
   }
 
@@ -762,14 +899,14 @@
           '<input type="checkbox" id="li-ac-autoscroll" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.autoScroll ? ' checked' : '') + '>' +
           '<label for="li-ac-autoscroll" style="cursor:pointer;">Auto-scroll to new posts</label>' +
         '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
+          '<input type="checkbox" id="li-ac-ultra-hide" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.ultraHide ? ' checked' : '') + '>' +
+          '<label for="li-ac-ultra-hide" style="cursor:pointer;">Ultra hide (only matching posts)</label>' +
+        '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid ' + BW.border + ';font-size:13px;">' +
           '<label for="li-ac-autoscroll-min" style="color:' + BW.muted + ';">Stop after (min)</label>' +
           '<input type="number" id="li-ac-autoscroll-min" min="0" step="1" value="' + autoScrollDurationMin + '" style="width:64px;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;text-align:center;">' +
           '<span style="color:' + BW.muted + ';font-size:11px;">0 = unlimited</span>' +
-        '</div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
-          '<span id="li-ac-hidden-count" style="color:' + BW.fg + ';">🙈 Hidden: 0</span>' +
-          '<button id="li-ac-hidden-show" style="flex:none;padding:5px 12px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">Show</button>' +
         '</div>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
           '<span>⌨ Keywords</span>' +
@@ -796,18 +933,17 @@
         chrome.storage.sync.set({ autoScroll: cfg.autoScroll });
         if (cfg.autoScroll) startAutoScroll(); else stopAutoScroll();
       });
+      const ultraToggle = panel.querySelector('#li-ac-ultra-hide');
+      ultraToggle.addEventListener('change', () => {
+        cfg.ultraHide = ultraToggle.checked;
+        chrome.storage.sync.set({ ultraHide: cfg.ultraHide });
+        scanFeed();
+      });
       const durInput = panel.querySelector('#li-ac-autoscroll-min');
       durInput.addEventListener('change', () => {
         setAutoScrollDurationMin(parseInt(durInput.value, 10));
         durInput.value = autoScrollDurationMin;
         dbg('auto-scroll duration set to', autoScrollDurationMin, 'min');
-      });
-      panel.querySelector('#li-ac-hidden-show').addEventListener('click', () => {
-        cfg.revealAll = true;
-        panelDismissed = false;
-        restoreHidden();
-        scanFeed();
-        dbg('Show clicked: revealAll=true');
       });
       const kwIn = panel.querySelector('#li-ac-kw-include');
       const kwEx = panel.querySelector('#li-ac-kw-exclude');
@@ -816,7 +952,6 @@
       function commitKwInputs() {
         cfg.includeKeywords = merge(cfg.includeKeywords, kwIn.value);
         cfg.excludeKeywords = merge(cfg.excludeKeywords, kwEx.value);
-        cfg.revealAll = false;
         panelDismissed = false;
         kwIn.value = '';
         kwEx.value = '';
@@ -840,25 +975,26 @@
       foundPanel.style.cssText = 'position:fixed;bottom:16px;right:348px;z-index:999999;width:320px;max-height:90vh;display:flex;flex-direction:column;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
       foundPanel.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-found-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-found-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
-        '<div id="li-ac-found-body" style="display:flex;flex-direction:column;flex:1 1 0;min-height:0;">' +
+        '<div id="li-ac-found-body" style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
           '<span>🔑 Keywords found</span>' +
           '<span id="li-ac-kw-sortbar" style="display:flex;gap:4px;">' +
             '<button id="li-ac-kw-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
-            '<button id="li-ac-kw-up" data-list-nav="kw" data-dir="-1" title="Previous keyword" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↑</button>' +
-            '<button id="li-ac-kw-down" data-list-nav="kw" data-dir="1" title="Next keyword" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↓</button>' +
           '</span>' +
         '</div>' +
-        '<div id="li-ac-kw-list" style="flex:1 1 0;min-height:38vh;overflow-y:auto;padding:5px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
+        '<div id="li-ac-kw-list" style="flex:1 1 0;min-height:18vh;overflow-y:auto;padding:5px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
           '<span>📧 Emails found</span>' +
           '<span id="li-ac-em-sortbar" style="display:flex;gap:4px;">' +
             '<button id="li-ac-em-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
-            '<button id="li-ac-em-up" data-list-nav="em" data-dir="-1" title="Previous email" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↑</button>' +
-            '<button id="li-ac-em-down" data-list-nav="em" data-dir="1" title="Next email" style="flex:none;width:24px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">↓</button>' +
           '</span>' +
         '</div>' +
-        '<div id="li-ac-panel-list" style="flex:1 1 0;min-height:38vh;overflow-y:auto;padding:6px 8px;"></div>' +
+        '<div id="li-ac-panel-list" style="flex:1 1 0;min-height:18vh;overflow-y:auto;padding:6px 8px;"></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
+          '<span>🙈 Hidden</span>' +
+          '<span id="li-ac-hidden-count" style="color:' + BW.muted + ';font-size:12px;">0</span>' +
+        '</div>' +
+        '<div id="li-ac-hidden-list" style="flex:1 1 0;min-height:18vh;max-height:35vh;overflow-y:auto;padding:6px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
         '</div>';
     document.body.appendChild(foundPanel);
     foundPanel.querySelector('#li-ac-found-close').addEventListener('click', () => {
@@ -889,17 +1025,18 @@
     const emSortBtn = foundPanel.querySelector('#li-ac-em-sort');
     if (kwSortBtn) kwSortBtn.addEventListener('click', () => toggleSort('kw'));
     if (emSortBtn) emSortBtn.addEventListener('click', () => toggleSort('em'));
+    applySortButtons(foundPanel);
   }
 
     // Re-render contents into whichever panels exist.
     if (panel) {
       const toggle = panel.querySelector('#li-ac-autoscroll');
       if (toggle) toggle.checked = !!cfg.autoScroll;
+      const ultraToggle = panel.querySelector('#li-ac-ultra-hide');
+      if (ultraToggle) ultraToggle.checked = !!cfg.ultraHide;
       renderTags(panel);
       applyKwSection(panel);
       applyPanelMinimized(panel);
-      const hiddenCountEl = panel.querySelector('#li-ac-hidden-count');
-      if (hiddenCountEl) hiddenCountEl.textContent = '🙈 Hidden: ' + getHiddenCount();
     }
     if (foundPanel) {
       const kwList = foundPanel.querySelector('#li-ac-kw-list');
@@ -920,7 +1057,23 @@
       } else {
         list.innerHTML = emSorted.map((hit, i) => hitRowHtml(hit, i, 'em')).join('');
       }
+
+      // Hidden list: currently-hidden posts (Show to reveal) + posts the user
+      // explicitly revealed via the list but which still match excludes (Hide).
+      const hiddenList = foundPanel.querySelector('#li-ac-hidden-list');
+      const hiddenCountEl = foundPanel.querySelector('#li-ac-hidden-count');
+      if (hiddenList) {
+        const hiddenEls = getHiddenPosts();
+        const revealedEls = getPosts().filter(p => revealedHiddenKeys.has(postKey(p)));
+        const rows = hiddenEls.map((el, i) => hiddenRowHtml(el, i, false))
+          .concat(revealedEls.map((el, i) => hiddenRowHtml(el, i, true)));
+        hiddenList.innerHTML = rows.length
+          ? rows.join('')
+          : '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:12px;">No hidden posts</div>';
+        if (hiddenCountEl) hiddenCountEl.textContent = rows.length;
+      }
       applyFoundPanelMinimized(foundPanel);
+      applySortButtons(foundPanel);
     }
 
     // Auto-scroll: when enabled, jump to a NEWLY discovered email/keyword post.
@@ -980,7 +1133,13 @@
       posts = getPosts(); // re-grab after filtering (hidden posts excluded)
       const kwHits = scanKeywords(posts);
       const emHits = cfg.scanEmails ? scanEmails(posts) : [];
-      renderPanel(emHits, kwHits);
+      // A post that matches keywords AND yields an email is shown only under
+      // Emails found — never duplicated under Keywords found.
+      const emKeys = new Set(emHits.map(h => h.key));
+      const kwFiltered = kwHits.filter(h => !emKeys.has(h.key));
+      renderPanel(emHits, kwFiltered);
+      // Ultra Hide: collapse every post except keyword/email matches.
+      applyUltraHide(kwFiltered, emHits);
     }, 400);
   }
 
@@ -1195,7 +1354,7 @@
       stopAutoScroll();
       stopTimeRefresh();
       cfg.autoScroll = false;
-      cfg.revealAll = false;
+      cfg.ultraHide = false;
       panelDismissed = false; // explicit reset re-enables the panel
       foundPanelDismissed = false;
       scrollLock.reset(); // free the viewport lock
@@ -1204,13 +1363,16 @@
       resetHitMeta(); // forget viewed/firstSeen
       if (scanTimer) clearTimeout(scanTimer); // L4: don't let a pending scan re-hide
       teardownPage(); // LEAK #1/#2: stop the scroll-pin interval + remove its window listeners
-      chrome.storage.sync.set({ autoScroll: false });
+      chrome.storage.sync.set({ autoScroll: false, ultraHide: false });
       removeBadge();
       if (panel) { panel.remove(); panel = null; } // full reset clears the panel UI
       if (foundPanel) { foundPanel.remove(); foundPanel = null; }
       document.querySelectorAll('.li-ac-hl').forEach(el => { el.style.outline = ''; el.style.boxShadow = ''; el.classList.remove('li-ac-hl'); });
       clearKeywordHighlights();
       restoreHidden();
+      // Clear Ultra Hide collapse classes too.
+      document.querySelectorAll('.' + ULTRA_CLS).forEach(el => el.classList.remove(ULTRA_CLS));
+      document.querySelectorAll('.' + ULTRA_CARD_CLS).forEach(el => el.classList.remove(ULTRA_CARD_CLS));
       connectQueue = [];
       sendResponse({ ok: true });
     }
@@ -1269,7 +1431,7 @@
 
   // === Load config + init ===
   chrome.storage.sync.get(
-    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false },
+    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false },
     opts => {
       cfg = opts;
       kwSectionCollapsed = !!opts.kwSectionCollapsed;
@@ -1379,13 +1541,18 @@
       }
       if (cfg.autoScroll) startAutoScroll(); else stopAutoScroll();
     }
+    if (changes.ultraHide) {
+      if (panel) {
+        const ultraToggle = panel.querySelector('#li-ac-ultra-hide');
+        if (ultraToggle) ultraToggle.checked = !!cfg.ultraHide;
+      }
+    }
     if (changes.includeKeywords || changes.excludeKeywords) {
-      cfg.revealAll = false; // keywords changed → re-apply filtering
       restoreHidden(); // posts no longer matching come back, then re-filter
     }
     // L4: only re-scan when a field that affects scanning actually changed,
     // otherwise an unrelated storage write (e.g. debug) needlessly re-scans.
-    const scanKeys = ['autoScroll', 'includeKeywords', 'excludeKeywords', 'revealAll', 'autoExpand', 'scanEmails'];
+    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails'];
     if (scanKeys.some(k => changes[k])) scanFeed();
   };
   chrome.storage.onChanged.addListener(onChangedListener);
@@ -1397,6 +1564,8 @@
     kwMatch, kwParts, esc, wordMatch, EMAIL_RE,
     getPosts, filterPosts, scanEmails, scanKeywords, expandPosts, scanButtons,
     restoreHidden, getHiddenCount, getHiddenPosts, clearKeywordHighlights, injectStyles,
+    revealHiddenPost, rehidePost, getRevealedHiddenKeys: () => revealedHiddenKeys,
+    applyUltraHide,
     startFeedObserver, getScroller, renderTags, removeKeyword, escHtml,
     extractKeywordsFromPost, addRightClickedTo, captureRightClick,
     startAutoScroll, stopAutoScroll, disableAutoScroll, scrollLock,
@@ -1408,6 +1577,7 @@
     isAllowedUrl, refreshUrlGate, applyGateOverlays,
     startUrlGateMonitor, stopUrlGateMonitor, stopTimeRefresh, startTimeRefresh,
     timeAgo, postKey, markViewed, resetHitMeta,
+    postBodyText,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,

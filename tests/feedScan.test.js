@@ -49,13 +49,32 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     expect(panel).not.toBeNull();
     expect(found).not.toBeNull();
     expect(found.textContent).toContain('bob@example.com');
-    expect(found.textContent).toContain('react');
+
+    // The react post carries an email, so it is listed ONLY under Emails found
+    // (never duplicated under Keywords found).
+    expect(found.querySelector('#li-ac-kw-list').textContent).not.toContain('react');
+    expect(found.querySelector('#li-ac-panel-list').textContent).toContain('React');
 
     // Include keywords highlight but never hide: both posts stay visible.
     expect(reactPost.isConnected).toBe(true);
     expect(vue.isConnected).toBe(true);
     expect(reactPost.classList.contains('li-ac-kw-hl')).toBe(true);
     expect(vue.classList.contains('li-ac-kw-hl')).toBe(false);
+  });
+
+  test('a keyword-only post still appears under Keywords found, not under Emails', async () => {
+    jest.useFakeTimers();
+    global.__LI.setCfg({ includeKeywords: ['react'] });
+
+    makePost('React senior role, no contact details here');
+
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+
+    const found = document.getElementById('li-ac-found-panel');
+    expect(found).not.toBeNull();
+    expect(found.querySelector('#li-ac-kw-list').textContent).toContain('react');
+    expect(found.querySelector('#li-ac-panel-list').textContent).toContain('No emails found');
   });
 
   test('exclude keywords hide matching posts (collapsed, still in DOM) and show the hidden counter', async () => {
@@ -72,15 +91,20 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     const found = document.getElementById('li-ac-found-panel');
     expect(panel).not.toBeNull();
 
-    // Hidden post: still in DOM but collapsed, excluded from the found panel.
+    // Hidden post: still in DOM but collapsed, excluded from the found panel's
+    // keyword/email lists. It appears only in the new Hidden list.
     expect(netPost.isConnected).toBe(true);
     expect(netPost.classList.contains('li-ac-hidden')).toBe(true);
-    expect(found.textContent).not.toContain('net@example.com');
-    expect(found.textContent).toContain('react@example.com');
-    expect(panel.textContent).toContain('Hidden: 1');
+    expect(found.querySelector('#li-ac-panel-list').textContent).not.toContain('net@example.com');
+    expect(found.querySelector('#li-ac-panel-list').textContent).toContain('react@example.com');
+    expect(found.querySelector('#li-ac-kw-list').textContent).not.toContain('net@example.com');
+    expect(found.querySelector('#li-ac-hidden-list').textContent).toContain('net@example.com');
+    // The reason it was hidden (matching exclude keyword) is shown in the row.
+    expect(found.querySelector('#li-ac-hidden-list').textContent).toContain('.net');
 
-    // "Show" restores the hidden post.
-    panel.querySelector('#li-ac-hidden-show').click();
+    // Per-post "Show" restores just that hidden post.
+    found.querySelector('#li-ac-hidden-list [data-hidden-toggle="show"]').click();
+    await jest.advanceTimersByTimeAsync(400);
     expect(netPost.classList.contains('li-ac-hidden')).toBe(false);
     expect(global.__LI.getHiddenCount()).toBe(0);
   });
@@ -155,7 +179,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
   test('clicking a keyword panel entry scrolls its post into view', async () => {
     jest.useFakeTimers();
     global.__LI.setCfg({ includeKeywords: ['react'] });
-    makePost('React dev bob@example.com');
+    makePost('React dev role, no contact details here');
 
     sendMessage({ type: 'FEED_SCAN' });
     await jest.advanceTimersByTimeAsync(400);
@@ -239,5 +263,105 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     await jest.advanceTimersByTimeAsync(400);
 
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe('Ultra Hide mode', () => {
+  beforeEach(() => {
+    closePanels();
+    document.body.innerHTML = '';
+    resetState();
+    global.__LI.setCfg({ ...DEFAULTS, ultraHide: false });
+    global.chrome.storage.sync.set.mockClear();
+    global.__LI.knownEmailsClear();
+    global.__LI.knownKeywordKeysClear();
+    global.__LI.getRevealedHiddenKeys().clear();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    global.__LI.cleanup();
+  });
+
+  async function scan() {
+    jest.useFakeTimers();
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+  }
+
+  test('ultra hide collapses non-matching posts but keeps keyword and email posts expanded', async () => {
+    global.__LI.setCfg({ includeKeywords: ['react'], ultraHide: true });
+    const kwPost = makePost('React senior role, no contact details here');
+    const emPost = makePost('reach out to bob@example.com for the role');
+    const other = makePost('a totally unrelated business post');
+
+    await scan();
+
+    expect(other.classList.contains('li-ac-ultra')).toBe(true);
+    expect(kwPost.classList.contains('li-ac-ultra')).toBe(false);
+    expect(emPost.classList.contains('li-ac-ultra')).toBe(false);
+    // Ultra-hidden posts do NOT land in the Hidden section.
+    expect(document.getElementById('li-ac-found-panel').querySelector('#li-ac-hidden-list').textContent).not.toContain('unrelated');
+  });
+
+  test('disabling ultra hide removes the collapse classes', async () => {
+    global.__LI.setCfg({ includeKeywords: ['react'], ultraHide: true });
+    const other = makePost('a totally unrelated business post');
+    makePost('React senior role');
+    await scan();
+    expect(other.classList.contains('li-ac-ultra')).toBe(true);
+
+    global.__LI.setCfg({ ultraHide: false });
+    await scan();
+    expect(other.classList.contains('li-ac-ultra')).toBe(false);
+  });
+
+  test('ultra hide respects a manually revealed post', async () => {
+    global.__LI.setCfg({ excludeKeywords: ['.net'], ultraHide: true });
+    const netPost = makePost('we use .NET here at work');
+    const other = makePost('a totally unrelated business post');
+    await scan();
+    // Both are collapsed: one by exclude, one by ultra-hide.
+    expect(netPost.classList.contains('li-ac-hidden')).toBe(true);
+
+    // Reveal the excluded post from the Hidden list.
+    const found = document.getElementById('li-ac-found-panel');
+    found.querySelector('#li-ac-hidden-list [data-hidden-toggle="show"]').click();
+
+    expect(netPost.classList.contains('li-ac-hidden')).toBe(false);
+    // The revealed post stays expanded in ultra mode (its key is in the set).
+    expect(netPost.classList.contains('li-ac-ultra')).toBe(false);
+    // A non-matching, non-revealed post is still collapsed.
+    expect(other.classList.contains('li-ac-ultra')).toBe(true);
+  });
+
+  test('ultra hide toggle persists via chrome.storage.sync', async () => {
+    global.__LI.setCfg({ includeKeywords: ['react'], ultraHide: true });
+    makePost('React senior role');
+    await scan();
+
+    const panel = document.getElementById('li-ac-panel');
+    const toggle = panel.querySelector('#li-ac-ultra-hide');
+    expect(toggle).not.toBeNull();
+    expect(toggle.checked).toBe(true);
+
+    global.chrome.storage.sync.set.mockClear();
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ ultraHide: false });
+    expect(global.__LI.getCfg().ultraHide).toBe(false);
+  });
+
+  test('RESET disables ultra hide and clears its classes', async () => {
+    global.__LI.setCfg({ includeKeywords: ['react'], ultraHide: true });
+    const other = makePost('a totally unrelated business post');
+    makePost('React senior role');
+    await scan();
+    expect(other.classList.contains('li-ac-ultra')).toBe(true);
+
+    sendMessage({ type: 'RESET' });
+    expect(global.__LI.getCfg().ultraHide).toBe(false);
+    expect(other.classList.contains('li-ac-ultra')).toBe(false);
   });
 });

@@ -144,6 +144,7 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
     global.chrome.storage.sync.set.mockClear();
     global.__LI.knownEmailsClear();
     global.__LI.knownKeywordKeysClear();
+    global.__LI.getRevealedHiddenKeys().clear();
   });
 
   afterEach(() => {
@@ -155,9 +156,13 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
   async function openPanelWithHits() {
     jest.useFakeTimers();
     global.__LI.setCfg({ includeKeywords: ['react'] });
+    // Posts with emails land in the email list; keyword-only posts land in the
+    // keyword list (a post with both is listed only under emails).
     makePost('React role one bob@example.com');
     makePost('React role two carol@example.com');
     makePost('React role three dan@example.com');
+    makePost('React senior role, no contact details in this one');
+    makePost('React architect role, also no contact details here');
     sendMessage({ type: 'FEED_SCAN' });
     await jest.advanceTimersByTimeAsync(400);
     await jest.advanceTimersByTimeAsync(400);
@@ -179,65 +184,43 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
     expect(tags.length).toBeGreaterThan(0);
   });
 
-  test('↑/↓ arrows navigate the email list container', async () => {
+  test('↑/↓ arrow buttons are removed; only the Newest sort button remains', async () => {
     await openPanelWithHits();
-    const list = found.querySelector('#li-ac-panel-list');
-    const down = found.querySelector('#li-ac-em-down');
-    const up = found.querySelector('#li-ac-em-up');
-    const rows = () => Array.from(list.querySelectorAll('[data-idx]'));
-    expect(rows().length).toBeGreaterThanOrEqual(2);
-
-    // Click down: selects row 0.
-    down.click();
-    let sel = rows().filter(r => r.style.background).length;
-    expect(sel).toBe(1);
-
-    // Click down again: moves to row 1.
-    const first = rows().find(r => r.style.background);
-    down.click();
-    const second = rows().find(r => r.style.background);
-    expect(second).not.toBe(first);
-
-    // Up returns to the previous.
-    up.click();
-    const back = rows().find(r => r.style.background);
-    expect(back).toBe(first);
+    // Arrows removed per the redesign — only the Newest toggle stays.
+    expect(found.querySelector('#li-ac-em-up')).toBeNull();
+    expect(found.querySelector('#li-ac-em-down')).toBeNull();
+    expect(found.querySelector('#li-ac-kw-up')).toBeNull();
+    expect(found.querySelector('#li-ac-kw-down')).toBeNull();
+    expect(found.querySelector('#li-ac-em-sort')).not.toBeNull();
+    expect(found.querySelector('#li-ac-kw-sort')).not.toBeNull();
   });
 
-  test('↑/↓ arrows navigate the keyword list container', async () => {
-    await openPanelWithHits();
-    const list = found.querySelector('#li-ac-kw-list');
-    const down = found.querySelector('#li-ac-kw-down');
-    expect(Array.from(list.querySelectorAll('[data-idx]')).length).toBeGreaterThanOrEqual(2);
-
-    down.click();
-    const selected = Array.from(list.querySelectorAll('[data-idx]')).filter(r => r.style.background);
-    expect(selected).toHaveLength(1);
-  });
-
-  test('Newest sort toggle reorders the email list newest-first', async () => {
+  test('Newest sort is the default and the toggle reverts to feed order', async () => {
     await openPanelWithHits();
     const list = found.querySelector('#li-ac-panel-list');
 
-    // Mark one hit as viewed/older by manipulating hitMeta firstSeen directly.
+    // Mark the first email hit as older by manipulating hitMeta firstSeen.
     const rows0 = Array.from(list.querySelectorAll('[data-idx]'));
     expect(rows0.length).toBeGreaterThanOrEqual(2);
     const key0 = rows0[0].getAttribute('data-key');
     const meta0 = global.__LI.hitMeta().get('em:' + key0);
-    // Make row0 appear OLDER than the others.
     meta0.firstSeen = Date.now() - 60000;
 
-    // Default (no sort): feed order preserved — row0 stays first.
-    expect(rows0[0].getAttribute('data-key')).toBe(key0);
+    // Re-scan re-renders with the default newest-first sort → the now-older
+    // row0 should NOT be first anymore.
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+    const rowsAfter = Array.from(found.querySelector('#li-ac-panel-list').querySelectorAll('[data-idx]'));
+    expect(rowsAfter[0].getAttribute('data-key')).not.toBe(key0);
 
-    // Toggle sort via the button.
+    // Toggle sort off via the button → back to feed order, row0 first again.
     found.querySelector('#li-ac-em-sort').click();
     await jest.advanceTimersByTimeAsync(400);
     await jest.advanceTimersByTimeAsync(400);
 
-    const sortedRows = Array.from(found.querySelector('#li-ac-panel-list').querySelectorAll('[data-idx]'));
-    // Newest first → the older row0 should NOT be first anymore.
-    expect(sortedRows[0].getAttribute('data-key')).not.toBe(key0);
+    const feedRows = Array.from(found.querySelector('#li-ac-panel-list').querySelectorAll('[data-idx]'));
+    expect(feedRows[0].getAttribute('data-key')).toBe(key0);
   });
 
   test('panel rows use larger font sizes (headline 14px, snippet 12px)', async () => {
@@ -249,24 +232,97 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
     expect(snippet.style.fontSize).toBe('12px');
   });
 
-  test('Show button reveals hidden posts and re-scans them into lists', async () => {
+  test('per-post Show reveals hidden posts without a re-scan', async () => {
     await openPanelWithHits();
-    // Hide one post via exclude, then Show.
+    // Hide a post via exclude, then reveal it from the Found panel's Hidden list.
     global.__LI.setCfg({ excludeKeywords: ['one'] });
     sendMessage({ type: 'FEED_SCAN' });
     await jest.advanceTimersByTimeAsync(400);
     await jest.advanceTimersByTimeAsync(400);
     expect(global.__LI.getHiddenCount()).toBeGreaterThan(0);
 
-    panel = document.getElementById('li-ac-panel');
-    panel.querySelector('#li-ac-hidden-show').click();
-    await jest.advanceTimersByTimeAsync(400);
-
+    const foundPanelEl = document.getElementById('li-ac-found-panel');
+    // Re-query each iteration: the synchronous re-render swaps the rows, so a
+    // stale NodeList would detach the remaining Show buttons.
+    let showBtn = foundPanelEl.querySelector('#li-ac-hidden-list [data-hidden-toggle="show"]');
+    while (showBtn) {
+      showBtn.click();
+      showBtn = foundPanelEl.querySelector('#li-ac-hidden-list [data-hidden-toggle="show"]');
+    }
     expect(global.__LI.getHiddenCount()).toBe(0);
-    const countEl = panel.querySelector('#li-ac-hidden-count');
-    expect(countEl.textContent).toContain('Hidden: 0');
     // revealed post is back in the live post set
     expect(global.__LI.getPosts().length).toBeGreaterThan(0);
+  });
+
+  test('Hidden list lists hidden posts with a per-post Show toggle', async () => {
+    await openPanelWithHits();
+    global.__LI.setCfg({ excludeKeywords: ['one'] });
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    const found = document.getElementById('li-ac-found-panel');
+    const hiddenList = found.querySelector('#li-ac-hidden-list');
+    expect(hiddenList).not.toBeNull();
+    expect(hiddenList.querySelectorAll('[data-hidden-key]').length).toBeGreaterThan(0);
+
+    const showBtn = hiddenList.querySelector('[data-hidden-toggle="show"]');
+    expect(showBtn).not.toBeNull();
+    showBtn.click();
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    // That one post is revealed: not in the hidden list anymore, no longer hidden.
+    const hiddenAfter = global.__LI.getHiddenPosts();
+    expect(hiddenAfter.length).toBeLessThan(global.__LI.getHiddenCount() + 1);
+    // And it reappears in the live post set (getPosts excludes hidden posts).
+    expect(global.__LI.getPosts().length).toBeGreaterThan(0);
+  });
+
+  test('re-hiding a revealed post works from the Hidden list', async () => {
+    await openPanelWithHits();
+    global.__LI.setCfg({ excludeKeywords: ['one'] });
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    const found = document.getElementById('li-ac-found-panel');
+    const hiddenList = found.querySelector('#li-ac-hidden-list');
+    const showBtn = hiddenList.querySelector('[data-hidden-toggle="show"]');
+    const key = showBtn.closest('[data-hidden-key]').getAttribute('data-hidden-key');
+    showBtn.click();
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    // The revealed post now renders with a Hide button.
+    const hideBtn = found.querySelector('[data-hidden-toggle="hide"]');
+    expect(hideBtn).not.toBeNull();
+    expect(hideBtn.closest('[data-hidden-key]').getAttribute('data-hidden-key')).toBe(key);
+    hideBtn.click();
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    // Back to hidden.
+    expect(global.__LI.getHiddenPosts().some(p => global.__LI.postKey(p) === key)).toBe(true);
+    expect(found.querySelector('[data-hidden-toggle="show"]')).not.toBeNull();
+  });
+
+  test('clicking a hidden list row scrolls to the hidden post in the feed', async () => {
+    await openPanelWithHits();
+    global.__LI.setCfg({ excludeKeywords: ['one'] });
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    const found = document.getElementById('li-ac-found-panel');
+    const hiddenList = found.querySelector('#li-ac-hidden-list');
+    const row = hiddenList.querySelector('[data-hidden-key]');
+    expect(row).not.toBeNull();
+
+    // Click the row TEXT (not the Show button) → scrollIntoView fires.
+    const textEl = row.firstElementChild;
+    expect(() => textEl.click()).not.toThrow();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
   test('time-ago labels refresh in the found panel', async () => {
@@ -326,8 +382,12 @@ describe('two-panel layout (control + found)', () => {
     const found = document.getElementById('li-ac-found-panel');
     const kwList = found.querySelector('#li-ac-kw-list');
     const emList = found.querySelector('#li-ac-panel-list');
-    expect(kwList.style.minHeight).toBe('38vh');
-    expect(emList.style.minHeight).toBe('38vh');
+    expect(kwList.style.minHeight).toBe('18vh');
+    expect(emList.style.minHeight).toBe('18vh');
+    // The Hidden list gets a real minimum too (was squeezed to a sliver).
+    const hiddenList = found.querySelector('#li-ac-hidden-list');
+    expect(hiddenList.style.minHeight).toBe('18vh');
+    expect(hiddenList.style.maxHeight).toBe('35vh');
   });
 
   test('closing the found panel leaves the control panel open (independent close)', async () => {

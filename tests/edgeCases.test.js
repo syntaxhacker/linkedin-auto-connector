@@ -5,7 +5,7 @@
  *   H1  — double START is coalesced (no concurrent processNext chains)
  *   H2  — STOP aborts an in-flight send
  *   H3  — storage key removal / non-array values don't crash the scanner
- *   M2  — Show button sticky reveal (revealAll)
+ *   M2  — per-post hidden reveal (revealedHiddenKeys)
  *   L3  — escHtml escapes HTML in keywords/emails
  *   M7  — feed marker matching is case-insensitive + locale fallbacks
  *   tags — apply → input cleared → closable tags; tag removal re-scans
@@ -120,35 +120,41 @@ describe('H3: storage corruption handling', () => {
   });
 });
 
-describe('M2: Show button sticky reveal', () => {
+describe('M2: per-post hidden reveal', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     global.__LI.setCfg({ ...DEFAULTS });
+    global.__LI.getRevealedHiddenKeys().clear();
   });
 
   afterEach(() => {
     global.__LI.cleanup();
   });
 
-  test('Show sets revealAll so filterPosts stops hiding until keywords change', () => {
+  test('per-post reveal shows a single hidden post and survives re-filtering', () => {
     global.__LI.setCfg({ excludeKeywords: ['.net'] });
-    makePost('we use .NET here');
+    const netPost = makePost('we use .NET here');
+    const javaPost = makePost('we use Java here');
 
     expect(global.__LI.filterPosts(global.__LI.getPosts())).toBe(1);
     expect(global.__LI.getHiddenCount()).toBe(1);
 
-    // Simulate the Show button: reveal + sticky override.
-    global.__LI.setCfg({ revealAll: true });
-    global.__LI.restoreHidden();
+    // Reveal the one hidden post via the Found-panel per-post Show action.
+    global.__LI.revealHiddenPost(netPost);
+    expect(netPost.classList.contains('li-ac-hidden')).toBe(false);
     expect(global.__LI.getHiddenCount()).toBe(0);
 
-    // filterPosts now skips hiding entirely.
+    // filterPosts must not immediately re-hide it (revealedHiddenKeys).
     expect(global.__LI.filterPosts(global.__LI.getPosts())).toBe(0);
     expect(global.__LI.getHiddenCount()).toBe(0);
 
-    // Keyword change clears the override and re-applies filtering.
-    global.__LI.setCfg({ revealAll: false });
-    expect(global.__LI.filterPosts(global.__LI.getPosts())).toBe(1);
+    // Re-hiding works too.
+    global.__LI.rehidePost(netPost);
+    expect(netPost.classList.contains('li-ac-hidden')).toBe(true);
+    expect(global.__LI.getHiddenCount()).toBe(1);
+    // And the revealed-key set no longer protects it.
+    global.__LI.getRevealedHiddenKeys().clear();
+    expect(global.__LI.filterPosts(global.__LI.getPosts())).toBe(0);
   });
 });
 

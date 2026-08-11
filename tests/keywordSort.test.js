@@ -191,8 +191,6 @@ describe('found panel: sort/↑/↓ bars hidden when a section has no hits', () 
     await jest.advanceTimersByTimeAsync(400);
 
     expect(document.getElementById('li-ac-em-sortbar').style.display).toBe('flex');
-    expect(document.getElementById('li-ac-em-sort')).not.toBeNull(); // buttons still wired
-    expect(document.getElementById('li-ac-em-up')).not.toBeNull();
-    expect(document.getElementById('li-ac-em-down')).not.toBeNull();
+    expect(document.getElementById('li-ac-em-sort')).not.toBeNull(); // button still wired
   });
 });

@@ -57,8 +57,9 @@ describe('chrome.runtime.onMessage handler', () => {
     const { response } = sendMessage({ type: 'RESET' });
     expect(response).toEqual({ ok: true });
     expect(global.__LI.getCounts()).toEqual({ connected: 0, skipped: 0, failed: 0 });
-    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ autoScroll: false });
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ autoScroll: false, ultraHide: false });
     expect(global.__LI.getCfg().autoScroll).toBe(false);
+    expect(global.__LI.getCfg().ultraHide).toBe(false);
   });
 
   test('RESET restores hidden posts (clears .li-ac-hidden)', () => {

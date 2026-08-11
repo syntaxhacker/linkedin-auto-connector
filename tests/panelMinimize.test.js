@@ -229,6 +229,51 @@ describe('panel minimize (control + found)', () => {
     expect(after).not.toBe(before);
   });
 
+  test('expanding the found panel restores its flex body, not a block/empty display', async () => {
+    await openPanels();
+    const found = document.getElementById('li-ac-found-panel');
+    const body = found.querySelector('#li-ac-found-body');
+
+    // The found body is a flex column wrapper (it lays out the keyword + email
+    // lists). Expanding must restore display:flex; setting '' reverts to block
+    // and collapses the wrapper to 0 height in the auto-height panel (regression).
+    expect(body.style.display).toBe('flex');
+    expect(body.style.flexDirection).toBe('column');
+  });
+
+  test('found body keeps content-driven flex so its lists scroll internally', async () => {
+    await openPanels();
+    const found = document.getElementById('li-ac-found-panel');
+    const body = found.querySelector('#li-ac-found-body');
+
+    // The wrapper must size to content (flex-basis:auto). flex-basis:0 in an
+    // auto-height parent (panel only sets max-height) collapses it to 0 and
+    // pushes the email section below the viewport when the keyword list is long.
+    expect(body.style.flex).toMatch(/auto/);
+    expect(body.style.minHeight).toBe('0');
+
+    // Keyword/email lists keep internal scroll + a min-height so a long list
+    // scrolls inside its own section instead of shoving the other section out.
+    const kwList = found.querySelector('#li-ac-kw-list');
+    const emList = found.querySelector('#li-ac-panel-list');
+    expect(kwList.style.overflowY).toBe('auto');
+    expect(emList.style.overflowY).toBe('auto');
+    expect(kwList.style.minHeight).toMatch(/vh/);
+    expect(emList.style.minHeight).toMatch(/vh/);
+  });
+
+  test('expanding from minimized also restores the flex body', async () => {
+    await openPanels();
+    const body = document.getElementById('li-ac-found-body');
+    const btn = document.getElementById('li-ac-found-min');
+    btn.click();
+    expect(body.style.display).toBe('none');
+    btn.click();
+    expect(global.__LI.getFoundPanelMinimized()).toBe(false);
+    expect(body.style.display).toBe('flex');
+    expect(btn.textContent).toBe('–');
+  });
+
   test('minimized state is honored when loaded from storage at init', async () => {
     jest.useFakeTimers();
     global.chrome.storage.sync.get.mockImplementationOnce((_defaults, callback) => {

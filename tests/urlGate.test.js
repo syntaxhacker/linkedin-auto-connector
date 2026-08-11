@@ -186,3 +186,145 @@ describe('URL gate rendering + handlers', () => {
     expect(document.getElementById('li-ac-found-panel').querySelector('.li-ac-gate-overlay')).toBeNull();
   });
 });
+
+describe('URL gate lifecycle: auto-scroll, time refresh, gate monitor', () => {
+  beforeEach(() => {
+    closePanels();
+    document.body.innerHTML = '';
+    resetState();
+    global.__LI.setCfg({ ...DEFAULTS });
+    global.chrome.storage.sync.set.mockClear();
+    global.__LI.knownEmailsClear();
+    global.__LI.knownKeywordKeysClear();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    // Make sure we never leak a gated location into the next test.
+    if (!window.location.href.startsWith('https://www.linkedin.com/search/')) {
+      Object.defineProperty(window, 'location', { value: new URL('https://www.linkedin.com/search/'), configurable: true });
+    }
+    global.__LI.cleanup();
+  });
+
+  test('auto-scroll restarts when returning to an allowed URL after being gated', async () => {
+    jest.useFakeTimers();
+    global.__LI.setCfg({ ...DEFAULTS, autoScroll: true });
+    makePost('a normal post'); // feed present so the auto-scroll interval can tick
+
+    // Gate the page: refreshUrlGate -> renderGatedPanels must stop auto-scroll.
+    const orig = setLocation('https://www.linkedin.com/jobs/');
+    global.__LI.refreshUrlGate();
+    const scroller = global.__LI.getScroller();
+    scroller.scrollTop = 0;
+    await jest.advanceTimersByTimeAsync(2500);
+    expect(scroller.scrollTop).toBe(0); // stopped while gated
+
+    // Back to Search/Feed: refreshUrlGate must restart auto-scroll (cfg on).
+    restoreLocation(orig);
+    global.__LI.refreshUrlGate();
+    await jest.advanceTimersByTimeAsync(2500);
+    expect(scroller.scrollTop).toBeGreaterThan(0); // interval is scrolling again
+  });
+
+  test('renderGatedPanels stops the time-refresh interval (no time-ago updates while gated)', async () => {
+    jest.useFakeTimers();
+    // Scan on an allowed page: a hit row renders with a live "Xs ago" label
+    // (renderPanel arms the 10s time-refresh interval).
+    makePost('contact bob@example.com');
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+    const row = document.querySelector('[data-ago]');
+    expect(row).not.toBeNull();
+    const before = row.textContent;
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(document.querySelector('[data-ago]').textContent).not.toBe(before); // interval is live
+
+    // Gate the page: the notice render must not keep refreshing time labels.
+    const orig = setLocation('https://www.linkedin.com/jobs/');
+    global.__LI.refreshUrlGate();
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+    expect(document.querySelectorAll('[data-ago]').length).toBe(0); // gated render wiped the rows
+    expect(document.getElementById('li-ac-panel').querySelector('.li-ac-gate-overlay')).not.toBeNull();
+
+    // Well past a tick while gated: no time-ago rows resurrect, no errors.
+    await jest.advanceTimersByTimeAsync(30000);
+    expect(document.querySelectorAll('[data-ago]').length).toBe(0);
+
+    restoreLocation(orig);
+  });
+
+  test('stopTimeRefresh freezes time-ago labels until startTimeRefresh is called again', async () => {
+    jest.useFakeTimers();
+    makePost('contact bob@example.com');
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+    const row = document.querySelector('[data-ago]');
+    expect(row).not.toBeNull();
+
+    global.__LI.stopTimeRefresh();
+    const frozen = row.textContent;
+    await jest.advanceTimersByTimeAsync(30000);
+    expect(row.textContent).toBe(frozen); // interval cancelled -> label frozen
+
+    global.__LI.startTimeRefresh();
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(row.textContent).not.toBe(frozen); // restarted -> ticks again
+  });
+
+  test('dismissing both panels stops the URL gate monitor', async () => {
+    jest.useFakeTimers();
+    global.__LI.setCfg({ ...DEFAULTS, autoScroll: true });
+    makePost('a normal post'); // feed present so a live monitor would restart auto-scroll
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    // Monitor live: its 2s tick notices the SPA navigation to a gated page.
+    global.__LI.startUrlGateMonitor();
+    const orig = setLocation('https://www.linkedin.com/jobs/');
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(document.querySelector('.li-ac-gate-overlay')).not.toBeNull();
+
+    // Close BOTH panels: the close handlers must stop the monitor.
+    closePanels();
+
+    // Return to Search/Feed and wait well past a monitor tick. With the monitor
+    // stopped, refreshUrlGate never runs, so auto-scroll is NOT restarted
+    // (a live monitor would have called refreshUrlGate -> startAutoScroll).
+    restoreLocation(orig);
+    const scroller = global.__LI.getScroller();
+    scroller.scrollTop = 0;
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(scroller.scrollTop).toBe(0);
+
+    // The popstate listener is removed too (stopUrlGateMonitor cleans both).
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await jest.advanceTimersByTimeAsync(2500);
+    expect(scroller.scrollTop).toBe(0);
+  });
+
+  test('startUrlGateMonitor/stopUrlGateMonitor are idempotent', async () => {
+    jest.useFakeTimers();
+    expect(typeof global.__LI.startUrlGateMonitor).toBe('function');
+    expect(typeof global.__LI.stopUrlGateMonitor).toBe('function');
+
+    // Not started yet: stopping is a safe no-op.
+    expect(() => global.__LI.stopUrlGateMonitor()).not.toThrow();
+
+    // Starting twice must not throw or double-arm; the monitor still fires once.
+    global.__LI.startUrlGateMonitor();
+    global.__LI.startUrlGateMonitor();
+    const orig = setLocation('https://www.linkedin.com/jobs/');
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(document.querySelector('.li-ac-gate-overlay')).not.toBeNull();
+    restoreLocation(orig);
+
+    // Stopping twice is also a safe no-op.
+    expect(() => global.__LI.stopUrlGateMonitor()).not.toThrow();
+    expect(() => global.__LI.stopUrlGateMonitor()).not.toThrow();
+  });
+});

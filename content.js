@@ -100,6 +100,7 @@
   function renderGatedPanels() {
     dbg('url gate: not a Search/Feed page — showing blurred notice panels');
     stopAutoScroll();
+    stopTimeRefresh();
     renderPanel([], []); // renderPanel applies the gate overlays for both panels
   }
 
@@ -111,6 +112,7 @@
     } else {
       injectStyles();
       scanFeed();
+      if (cfg.autoScroll) startAutoScroll(); // restart auto-scroll when returning to Search/Feed
     }
   }
 
@@ -709,7 +711,7 @@
     if (!panelEl) return;
     const body = panelEl.querySelector('#li-ac-found-body');
     const btn = panelEl.querySelector('#li-ac-found-min');
-    if (body) body.style.display = foundPanelMinimized ? 'none' : '';
+    if (body) body.style.display = foundPanelMinimized ? 'none' : 'flex';
     if (btn) btn.textContent = foundPanelMinimized ? '+' : '\u2013';
   }
   function setPanelMinimized(v) {
@@ -786,7 +788,7 @@
       panel.querySelector('#li-ac-panel-close').addEventListener('click', () => {
         panelDismissed = true;
         if (panel) { panel.remove(); panel = null; }
-        if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); }
+        if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); stopUrlGateMonitor(); }
       });
       const toggle = panel.querySelector('#li-ac-autoscroll');
       toggle.addEventListener('change', () => {
@@ -862,7 +864,7 @@
     foundPanel.querySelector('#li-ac-found-close').addEventListener('click', () => {
       foundPanelDismissed = true;
       if (foundPanel) { foundPanel.remove(); foundPanel = null; }
-      if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); }
+      if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); stopUrlGateMonitor(); }
     });
     foundPanel.querySelector('#li-ac-found-min').addEventListener('click', () => toggleFoundPanelMinimize());
     applyFoundPanelMinimized(foundPanel);
@@ -1404,6 +1406,7 @@
     knownKeywordKeysAdd: k => knownKeywordKeys.add(k),
     knownKeywordKeysClear: () => knownKeywordKeys.clear(),
     isAllowedUrl, refreshUrlGate, applyGateOverlays,
+    startUrlGateMonitor, stopUrlGateMonitor, stopTimeRefresh, startTimeRefresh,
     timeAgo, postKey, markViewed, resetHitMeta,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,

@@ -344,6 +344,8 @@ describe('two-panel layout (control + found)', () => {
     global.__LI.stopAutoScroll();
     document.body.innerHTML = '';
     global.__LI.setCfg({ ...DEFAULTS });
+    global.__LI.sortNewest.kw = true;
+    global.__LI.sortNewest.em = true;
     global.chrome.storage.sync.set.mockClear();
     global.__LI.knownEmailsClear();
     global.__LI.knownKeywordKeysClear();
@@ -377,16 +379,18 @@ describe('two-panel layout (control + found)', () => {
     expect(found.querySelector('#li-ac-panel-list')).not.toBeNull();
   });
 
-  test('found lists have fixed equal heights', async () => {
+  test('found lists have dynamic heights: hits get 18vh, empty collapses to 0', async () => {
     await open();
     const found = document.getElementById('li-ac-found-panel');
     const kwList = found.querySelector('#li-ac-kw-list');
     const emList = found.querySelector('#li-ac-panel-list');
-    expect(kwList.style.minHeight).toBe('18vh');
+    // No include keywords → keyword list empty → collapsed.
+    expect(kwList.style.minHeight).toBe('0');
+    // Email hits present → keeps its 18vh min.
     expect(emList.style.minHeight).toBe('18vh');
-    // The Hidden list gets a real minimum too (was squeezed to a sliver).
+    // The Hidden list gets a real minimum when it has rows (squeeze-proof).
     const hiddenList = found.querySelector('#li-ac-hidden-list');
-    expect(hiddenList.style.minHeight).toBe('18vh');
+    expect(hiddenList.style.minHeight).toBe('0'); // no hidden posts
     expect(hiddenList.style.maxHeight).toBe('35vh');
   });
 
@@ -409,6 +413,31 @@ describe('two-panel layout (control + found)', () => {
     sendMessage({ type: 'RESET' });
     expect(document.getElementById('li-ac-panel')).toBeNull();
     expect(document.getElementById('li-ac-found-panel')).toBeNull();
+  });
+
+  test('found panel hugs the right edge when the control panel is closed', async () => {
+    await open();
+    const found = document.getElementById('li-ac-found-panel');
+    expect(found.style.right).toBe('348px');
+    document.getElementById('li-ac-panel-close').click();
+    expect(document.getElementById('li-ac-panel')).toBeNull();
+    expect(found.style.right).toBe('16px');
+  });
+
+  test('sort button shows a distinct active color (newest) vs inactive (feed order)', async () => {
+    await open();
+    const found = document.getElementById('li-ac-found-panel');
+    const btn = found.querySelector('#li-ac-em-sort');
+    // Newest-first is the default → active (blue), label "⇅ Newest".
+    expect(btn.style.background).toBe('rgb(96, 165, 250)'); // #60a5fa
+    expect(btn.textContent).toBe('⇅ Newest');
+    btn.click();
+    // Toggled off → feed order, white background, label updated.
+    expect(btn.style.background).toBe('rgb(255, 255, 255)');
+    expect(btn.textContent).toBe('Feed order');
+    btn.click();
+    // Back to active.
+    expect(btn.style.background).toBe('rgb(96, 165, 250)');
   });
 });
 

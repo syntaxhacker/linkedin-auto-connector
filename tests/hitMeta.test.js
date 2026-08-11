@@ -126,4 +126,76 @@ describe('hit metadata (firstSeen + viewed)', () => {
     sendMessage({ type: 'RESET' });
     expect(global.__LI.hitMeta().size).toBe(0);
   });
+
+  test('clearSeen removes viewed rows and survives a re-scan', async () => {
+    const panel = await openPanel();
+    const rows = panel.querySelectorAll('[data-kind="em"][data-key]');
+    expect(rows.length).toBeGreaterThan(0);
+    rows[0].click();
+    expect(panel.querySelector('[data-viewed]')).not.toBeNull();
+    const clickedKey = rows[0].getAttribute('data-key');
+
+    global.__LI.clearSeen();
+
+    // The viewed row is gone from the list; remaining rows (unviewed) stay.
+    const after = panel.querySelectorAll('[data-kind="em"][data-key]');
+    expect([...after].some(r => r.getAttribute('data-key') === clickedKey)).toBe(false);
+
+    // Re-scan does NOT bring it back (dismissedKeys persists).
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+    const panel2 = document.getElementById('li-ac-found-panel');
+    expect([...panel2.querySelectorAll('[data-kind="em"][data-key]')].some(r => r.getAttribute('data-key') === clickedKey)).toBe(false);
+  });
+
+  test('clearSeen leaves unviewed rows listed', async () => {
+    jest.useFakeTimers();
+    makePost('first alice@example.com');
+    makePost('second bob@example.com');
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+    const panel = document.getElementById('li-ac-found-panel');
+    const rows = panel.querySelectorAll('[data-kind="em"][data-key]');
+    expect(rows.length).toBeGreaterThan(1);
+    rows[0].click();
+    global.__LI.clearSeen();
+
+    const after = panel.querySelectorAll('[data-kind="em"][data-key]');
+    expect(after.length).toBeGreaterThan(0);
+    expect([...after].every(r => r.getAttribute('data-key') !== rows[0].getAttribute('data-key'))).toBe(true);
+    // The unclicked row is still listed and still unviewed.
+    expect(panel.querySelector('[data-viewed]')).toBeNull();
+  });
+
+  test('RESET restores rows cleared by clearSeen', async () => {
+    const panel = await openPanel();
+    const rows = panel.querySelectorAll('[data-kind="em"][data-key]');
+    rows[0].click();
+    const clickedKey = rows[0].getAttribute('data-key');
+    global.__LI.clearSeen();
+    expect([...panel.querySelectorAll('[data-kind="em"][data-key]')].some(r => r.getAttribute('data-key') === clickedKey)).toBe(false);
+
+    sendMessage({ type: 'RESET' });
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+    const panel2 = document.getElementById('li-ac-found-panel');
+    expect([...panel2.querySelectorAll('[data-kind="em"][data-key]')].some(r => r.getAttribute('data-key') === clickedKey)).toBe(true);
+  });
+
+  test('applyViewedBorders marks cleared posts green in the feed, cleared by RESET', async () => {
+    const panel = await openPanel();
+    const rows = panel.querySelectorAll('[data-kind="em"][data-key]');
+    rows[0].click();
+    global.__LI.clearSeen();
+    // The cleared post element gets the green marker class.
+    const post = global.__LI.getPosts().find(p => global.__LI.postKey(p) === rows[0].getAttribute('data-key'));
+    expect(post).not.toBeNull();
+    expect(post.classList.contains('li-ac-viewed')).toBe(true);
+
+    sendMessage({ type: 'RESET' });
+    expect(post.classList.contains('li-ac-viewed')).toBe(false);
+  });
 });

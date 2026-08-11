@@ -252,14 +252,14 @@ describe('panel minimize (control + found)', () => {
     expect(body.style.flex).toMatch(/auto/);
     expect(body.style.minHeight).toBe('0');
 
-    // Keyword/email lists keep internal scroll + a min-height so a long list
-    // scrolls inside its own section instead of shoving the other section out.
+    // Keyword/email lists keep internal scroll. A list with hits gets an 18vh
+    // min-height so it scrolls internally; an empty list collapses to 0.
     const kwList = found.querySelector('#li-ac-kw-list');
     const emList = found.querySelector('#li-ac-panel-list');
     expect(kwList.style.overflowY).toBe('auto');
     expect(emList.style.overflowY).toBe('auto');
-    expect(kwList.style.minHeight).toMatch(/vh/);
-    expect(emList.style.minHeight).toMatch(/vh/);
+    expect(kwList.style.minHeight).toBe('0'); // no include keywords → empty
+    expect(emList.style.minHeight).toMatch(/vh/); // email hit present
   });
 
   test('expanding from minimized also restores the flex body', async () => {

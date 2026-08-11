@@ -62,7 +62,7 @@ describe('MutationObserver (own-mutation guard)', () => {
 
     sendMessage({ type: 'FEED_SCAN' });
     await jest.advanceTimersByTimeAsync(400);
-    expect(document.getElementById('li-ac-found-panel').textContent).toContain('No emails found');
+    expect(document.getElementById('li-ac-found-panel').textContent).toContain('No email matches');
 
     // A new post arriving in the feed is an external mutation.
     makePost('new engineer email new@example.com');

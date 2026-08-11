@@ -39,7 +39,7 @@ function updateUI(s) {
   if (!s) return;
   $('count-ok').textContent = s.connected || 0;
   $('count-skip').textContent = s.skipped || 0;
-  setStatus(s.running ? 'active' : 'idle', s.running ? 'Running…' : 'Idle — open LinkedIn search page');
+  setStatus(s.running ? 'active' : 'idle', s.running ? 'Running…' : 'Idle — open Search or Feed');
 }
 
 function saveDelay() {
@@ -100,7 +100,7 @@ stopBtn.addEventListener('click', () => {
   searchBtn.disabled = false;
   startBtn.disabled = lastScanCount <= 0;
   stopBtn.disabled = true;
-  setStatus('idle', 'Idle — open LinkedIn search page');
+  setStatus('idle', 'Idle — open Search or Feed');
   $('log').textContent = '⏹ Stopped.';
 });
 

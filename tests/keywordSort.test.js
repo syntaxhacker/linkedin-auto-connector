@@ -161,7 +161,7 @@ describe('found panel: sort/↑/↓ bars hidden when a section has no hits', () 
     expect(kwBar.style.display).toBe('none');
     expect(emBar.style.display).toBe('none');
     expect(document.getElementById('li-ac-kw-list').textContent).toContain('No keyword matches');
-    expect(document.getElementById('li-ac-panel-list').textContent).toContain('No emails found');
+    expect(document.getElementById('li-ac-panel-list').textContent).toContain('No email matches');
   });
 
   test('keyword hits exist -> keyword sort bar visible', async () => {

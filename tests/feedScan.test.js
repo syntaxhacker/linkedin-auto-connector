@@ -74,7 +74,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     const found = document.getElementById('li-ac-found-panel');
     expect(found).not.toBeNull();
     expect(found.querySelector('#li-ac-kw-list').textContent).toContain('react');
-    expect(found.querySelector('#li-ac-panel-list').textContent).toContain('No emails found');
+    expect(found.querySelector('#li-ac-panel-list').textContent).toContain('No email matches');
   });
 
   test('exclude keywords hide matching posts (collapsed, still in DOM) and show the hidden counter', async () => {
@@ -109,7 +109,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     expect(global.__LI.getHiddenCount()).toBe(0);
   });
 
-  test('renders "No emails found" when no hits exist', async () => {
+  test('renders "No email matches" when no hits exist', async () => {
     jest.useFakeTimers();
     makePost('no contact details at all');
 
@@ -119,7 +119,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     const panel = document.getElementById('li-ac-panel');
     const found = document.getElementById('li-ac-found-panel');
     expect(panel).not.toBeNull();
-    expect(found.textContent).toContain('No emails found');
+    expect(found.textContent).toContain('No email matches');
   });
 
   test('panel close button removes the control panel, leaving the found panel open', async () => {

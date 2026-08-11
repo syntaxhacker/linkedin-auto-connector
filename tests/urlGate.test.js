@@ -122,7 +122,7 @@ describe('URL gate rendering + handlers', () => {
       // the property so it cannot be asserted here — visible in Chrome.)
     });
     // No scanning happened: lists empty, no highlighted/hidden posts.
-    expect(document.getElementById('li-ac-panel-list').textContent).toContain('No emails found');
+    expect(document.getElementById('li-ac-panel-list').textContent).toContain('No email matches');
 
     restoreLocation(orig);
   });

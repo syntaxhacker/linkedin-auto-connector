@@ -10,14 +10,14 @@ function ensureMenu() {
   try {
     chrome.contextMenus.create({
       id: MENU_INCLUDE,
-      title: '🔗 Add post to Include keywords',
+      title: 'Add post to Include keywords',
       contexts: ['page', 'selection', 'link']
     });
   } catch (e) { /* already exists */ }
   try {
     chrome.contextMenus.create({
       id: MENU_EXCLUDE,
-      title: '🔗 Add post to Exclude keywords',
+      title: 'Add post to Exclude keywords',
       contexts: ['page', 'selection', 'link']
     });
   } catch (e) { /* already exists */ }

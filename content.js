@@ -150,6 +150,11 @@
   // exclude-keyword posts). Same card-collapse trick for the comment thread.
   const ULTRA_CLS = 'li-ac-ultra';
   const ULTRA_CARD_CLS = 'li-ac-ultra-card';
+  // Persistent green left-edge marker on feed posts that were removed from the
+  // found lists via "Clear seen" — so users understand why they're no longer
+  // listed. Uses an inset box-shadow (no layout shift, won't clash with the
+  // keyword amber outline).
+  const VIEWED_CLS = 'li-ac-viewed';
 
   function getHiddenPosts() {
     return Array.prototype.slice.call(document.querySelectorAll('.' + HIDDEN_CLS));
@@ -241,6 +246,7 @@
       '.' + ULTRA_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
       '.' + ULTRA_CARD_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
       '.' + ULTRA_CARD_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
+      '.' + VIEWED_CLS + ' { box-shadow: inset 3px 0 0 ' + C.ok + '; }' +
       '.' + HL_CLS + ' { outline: 3px solid ' + C.warn + '; outline-offset: 2px; box-shadow: 0 0 12px rgba(251,191,36,.5); transition: all 0.3s; }';
     document.head.appendChild(style);
   }
@@ -252,7 +258,7 @@
     b = document.createElement('div');
     b.id = 'li-ac-badge';
     b.style.cssText = 'position:fixed;top:60px;right:16px;z-index:999999;background:' + BW.bg + ';color:' + BW.fg + ';padding:10px 14px;border-radius:8px;font:14px/1.5 sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.5);min-width:190px;border:1px solid ' + BW.border + ';';
-    b.innerHTML = '<div style="font-weight:700;font-size:15px">🔗 Auto-Connector</div>' +
+    b.innerHTML = '<div style="font-weight:700;font-size:15px">Auto-Connector</div>' +
       '<div id="li-ac-status" style="color:' + BW.muted + ';margin-top:2px;display:none">⏳ Running...</div>' +
       '<div id="li-ac-count" style="margin-top:6px;font-size:13px">Connected: <b>0</b> | Skipped: <b>0</b></div>' +
       '<div id="li-ac-log" style="margin-top:6px;font-size:12px;color:' + BW.muted + '"></div>';
@@ -517,6 +523,20 @@
     Array.prototype.forEach.call(document.querySelectorAll('.' + HL_CLS), el => el.classList.remove(HL_CLS));
   }
 
+  // Green left-edge marker on feed posts that were removed from the found
+  // lists via "Clear seen". Re-applied every scan (LinkedIn re-renders posts),
+  // so cleared posts stay visibly marked until RESET.
+  function applyViewedBorders(posts) {
+    posts.forEach(p => {
+      const key = postKey(p);
+      if (dismissedKeys.has('kw:' + key) || dismissedKeys.has('em:' + key)) {
+        p.classList.add(VIEWED_CLS);
+      } else {
+        p.classList.remove(VIEWED_CLS);
+      }
+    });
+  }
+
   function scanKeywords(posts) {
     const hits = [];
     const includes = strArray(cfg.includeKeywords);
@@ -678,14 +698,26 @@
     return meta;
   }
 
-  function resetHitMeta() { hitMeta.clear(); }
+  function resetHitMeta() { hitMeta.clear(); dismissedKeys.clear(); }
+
+  // "Clear seen": every viewed hit is removed from the found lists (and gets a
+  // green border in the feed) so users see why it's no longer listed. Tracks
+  // `kind:key` entries that survive re-scans; RESET restores them.
+  const dismissedKeys = new Set();
+  function clearSeen() {
+    hitMeta.forEach((meta, k) => { if (meta.viewed) dismissedKeys.add(k); });
+    renderPanel(panelData, kwPanelData);
+    applyViewedBorders(getPosts());
+    return dismissedKeys.size;
+  }
 
   // Sort toggle state for the found lists (newest-discovered first by default).
   const sortNewest = { kw: true, em: true };
   function sortedHits(kind) {
     const arr = kind === 'kw' ? kwPanelData : panelData;
-    if (!sortNewest[kind]) return arr;
-    return arr.slice().sort((a, b) => {
+    const visible = arr.filter(h => !dismissedKeys.has(kind + ':' + h.key));
+    if (!sortNewest[kind]) return visible;
+    return visible.slice().sort((a, b) => {
       const ma = hitMeta.get(kind + ':' + a.key) || { firstSeen: 0 };
       const mb = hitMeta.get(kind + ':' + b.key) || { firstSeen: 0 };
       return mb.firstSeen - ma.firstSeen;
@@ -702,16 +734,32 @@
   function toggleSort(kind) {
     sortNewest[kind] = !sortNewest[kind];
     const btn = document.getElementById(kind === 'kw' ? 'li-ac-kw-sort' : 'li-ac-em-sort');
-    if (btn) btn.style.background = sortNewest[kind] ? BW.fg : BW.accentBg;
+    if (btn) applySortButtonStyle(btn, sortNewest[kind]);
     scanFeed();
   }
-  // Reflect the current sort state on the Newest button (active = newest-first,
-  // which is the default) whenever the panel is (re)rendered.
+  // Active (newest-first, the default) = blue background with dark text;
+  // inactive (feed order) = neutral white. Keeps the toggle state visible.
+  function applySortButtonStyle(btn, active) {
+    if (!btn) return;
+    if (active) {
+      btn.style.background = C.info;       // blue = newest-first is ON
+      btn.style.color = '#000000';
+      btn.textContent = '⇅ Newest';
+      btn.title = 'Newest first (click for feed order)';
+    } else {
+      btn.style.background = BW.fg;        // white = feed order
+      btn.style.color = '#000000';
+      btn.textContent = 'Feed order';
+      btn.title = 'Feed order (click for newest first)';
+    }
+  }
+  // Reflect the current sort state on the Newest button whenever the panel is
+  // (re)rendered.
   function applySortButtons(foundPanelEl) {
     if (!foundPanelEl) return;
     const setBtn = (id, kind) => {
       const btn = foundPanelEl.querySelector(id);
-      if (btn) btn.style.background = sortNewest[kind] ? BW.fg : BW.accentBg;
+      if (btn) applySortButtonStyle(btn, sortNewest[kind]);
     };
     setBtn('#li-ac-kw-sort', 'kw');
     setBtn('#li-ac-em-sort', 'em');
@@ -877,12 +925,18 @@
     return '<div data-hidden-idx="' + i + '" data-hidden-key="' + escHtml(key) + '" style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid ' + BW.border + ';">' +
       '<div style="flex:1 1 auto;min-width:0;">' +
         '<div style="color:' + BW.muted + ';font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + snippet + '</div>' +
-        '<div style="color:' + C.warn + ';font-size:10px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⛔ excluded: ' + reason + '</div>' +
+        '<div style="color:' + C.warn + ';font-size:10px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Hidden: ' + reason + '</div>' +
       '</div>' +
       btn +
     '</div>';
   }
 
+  // Found panel sits left of the control panel; when the control panel is
+  // closed it hugs the right edge instead of leaving a gap.
+  function positionFoundPanel() {
+    if (!foundPanel) return;
+    foundPanel.style.right = (panel && panel.isConnected) ? '348px' : '16px';
+  }
   function renderPanel(hits, kwHits) {
     panelData = hits;
     kwPanelData = kwHits || [];
@@ -897,16 +951,16 @@
         '<div id="li-ac-panel-body">' +
         '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
           '<input type="checkbox" id="li-ac-autoscroll" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.autoScroll ? ' checked' : '') + '>' +
-          '<label for="li-ac-autoscroll" style="cursor:pointer;">Auto-scroll to new posts</label>' +
+          '<label for="li-ac-autoscroll" style="cursor:pointer;">Auto-scroll feed</label>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
           '<input type="checkbox" id="li-ac-ultra-hide" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.ultraHide ? ' checked' : '') + '>' +
-          '<label for="li-ac-ultra-hide" style="cursor:pointer;">Ultra hide (only matching posts)</label>' +
+          '<label for="li-ac-ultra-hide" style="cursor:pointer;">Hide non-matching posts</label>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid ' + BW.border + ';font-size:13px;">' +
-          '<label for="li-ac-autoscroll-min" style="color:' + BW.muted + ';">Stop after (min)</label>' +
+          '<label for="li-ac-autoscroll-min" style="color:' + BW.muted + ';">Auto-stop after (min)</label>' +
           '<input type="number" id="li-ac-autoscroll-min" min="0" step="1" value="' + autoScrollDurationMin + '" style="width:64px;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;text-align:center;">' +
-          '<span style="color:' + BW.muted + ';font-size:11px;">0 = unlimited</span>' +
+          '<span style="color:' + BW.muted + ';font-size:11px;">0 = never</span>' +
         '</div>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
           '<span>⌨ Keywords</span>' +
@@ -925,6 +979,7 @@
       panel.querySelector('#li-ac-panel-close').addEventListener('click', () => {
         panelDismissed = true;
         if (panel) { panel.remove(); panel = null; }
+        positionFoundPanel();
         if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); stopUrlGateMonitor(); }
       });
       const toggle = panel.querySelector('#li-ac-autoscroll');
@@ -944,6 +999,11 @@
         setAutoScrollDurationMin(parseInt(durInput.value, 10));
         durInput.value = autoScrollDurationMin;
         dbg('auto-scroll duration set to', autoScrollDurationMin, 'min');
+      });
+      durInput.addEventListener('blur', () => {
+        // Normalize a stale/invalid value back to the clamped setting.
+        setAutoScrollDurationMin(parseInt(durInput.value, 10));
+        durInput.value = autoScrollDurationMin;
       });
       const kwIn = panel.querySelector('#li-ac-kw-include');
       const kwEx = panel.querySelector('#li-ac-kw-exclude');
@@ -972,26 +1032,25 @@
     if ((!foundPanel || !foundPanel.isConnected) && !foundPanelDismissed) {
       foundPanel = document.createElement('div');
       foundPanel.id = 'li-ac-found-panel';
-      foundPanel.style.cssText = 'position:fixed;bottom:16px;right:348px;z-index:999999;width:320px;max-height:90vh;display:flex;flex-direction:column;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
-      foundPanel.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-found-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-found-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
+      foundPanel.style.cssText = 'position:fixed;bottom:16px;right:348px;z-index:999999;width:320px;max-height:90vh;display:flex;flex-direction:column;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';      foundPanel.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-clear-seen" title="Remove viewed rows from the lists" style="flex:none;padding:3px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Clear seen</button><button id="li-ac-found-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-found-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
         '<div id="li-ac-found-body" style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
-          '<span>🔑 Keywords found</span>' +
+          '<span>🔑 Keyword matches</span>' +
           '<span id="li-ac-kw-sortbar" style="display:flex;gap:4px;">' +
             '<button id="li-ac-kw-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
           '</span>' +
         '</div>' +
         '<div id="li-ac-kw-list" style="flex:1 1 0;min-height:18vh;overflow-y:auto;padding:5px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
-          '<span>📧 Emails found</span>' +
+          '<span>📧 Email matches</span>' +
           '<span id="li-ac-em-sortbar" style="display:flex;gap:4px;">' +
             '<button id="li-ac-em-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
           '</span>' +
         '</div>' +
         '<div id="li-ac-panel-list" style="flex:1 1 0;min-height:18vh;overflow-y:auto;padding:6px 8px;"></div>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
-          '<span>🙈 Hidden</span>' +
+          '<span>🙈 Hidden posts</span>' +
           '<span id="li-ac-hidden-count" style="color:' + BW.muted + ';font-size:12px;">0</span>' +
         '</div>' +
         '<div id="li-ac-hidden-list" style="flex:1 1 0;min-height:18vh;max-height:35vh;overflow-y:auto;padding:6px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
@@ -1000,10 +1059,13 @@
     foundPanel.querySelector('#li-ac-found-close').addEventListener('click', () => {
       foundPanelDismissed = true;
       if (foundPanel) { foundPanel.remove(); foundPanel = null; }
+      positionFoundPanel();
       if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); stopUrlGateMonitor(); }
     });
     foundPanel.querySelector('#li-ac-found-min').addEventListener('click', () => toggleFoundPanelMinimize());
+    foundPanel.querySelector('#li-ac-clear-seen').addEventListener('click', () => clearSeen());
     applyFoundPanelMinimized(foundPanel);
+    positionFoundPanel();
   }
 
   startTimeRefresh();
@@ -1045,17 +1107,21 @@
       setSectionBarVisible('kw', kwSorted.length > 0);
       if (!kwSorted.length) {
         kwList.innerHTML = '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:13px;">No keyword matches</div>';
+        kwList.style.minHeight = '0';
       } else {
         kwList.innerHTML = kwSorted.map((hit, i) => hitRowHtml(hit, i, 'kw')).join('');
+        kwList.style.minHeight = '18vh';
       }
       const list = foundPanel.querySelector('#li-ac-panel-list');
       const emSorted = sortedHits('em');
       // Hide the section's sort/↑/↓ bar when its hit list is empty.
       setSectionBarVisible('em', emSorted.length > 0);
       if (!emSorted.length) {
-        list.innerHTML = '<div style="color:' + BW.muted + ';padding:8px;font-size:13px;">No emails found</div>';
+        list.innerHTML = '<div style="color:' + BW.muted + ';padding:8px;font-size:13px;">No email matches</div>';
+        list.style.minHeight = '0';
       } else {
         list.innerHTML = emSorted.map((hit, i) => hitRowHtml(hit, i, 'em')).join('');
+        list.style.minHeight = '18vh';
       }
 
       // Hidden list: currently-hidden posts (Show to reveal) + posts the user
@@ -1070,11 +1136,13 @@
         hiddenList.innerHTML = rows.length
           ? rows.join('')
           : '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:12px;">No hidden posts</div>';
+        hiddenList.style.minHeight = rows.length ? '18vh' : '0';
         if (hiddenCountEl) hiddenCountEl.textContent = rows.length;
       }
       applyFoundPanelMinimized(foundPanel);
       applySortButtons(foundPanel);
     }
+    positionFoundPanel();
 
     // Auto-scroll: when enabled, jump to a NEWLY discovered email/keyword post.
     // IMPORTANT: only acquire the 'hit' lock when there is actually something
@@ -1140,6 +1208,8 @@
       renderPanel(emHits, kwFiltered);
       // Ultra Hide: collapse every post except keyword/email matches.
       applyUltraHide(kwFiltered, emHits);
+      // Green marker on posts removed via "Clear seen" (survives re-renders).
+      applyViewedBorders(posts);
     }, 400);
   }
 
@@ -1373,6 +1443,8 @@
       // Clear Ultra Hide collapse classes too.
       document.querySelectorAll('.' + ULTRA_CLS).forEach(el => el.classList.remove(ULTRA_CLS));
       document.querySelectorAll('.' + ULTRA_CARD_CLS).forEach(el => el.classList.remove(ULTRA_CARD_CLS));
+      // Clear "Clear seen" feed markers (resetHitMeta already cleared the keys).
+      document.querySelectorAll('.' + VIEWED_CLS).forEach(el => el.classList.remove(VIEWED_CLS));
       connectQueue = [];
       sendResponse({ ok: true });
     }
@@ -1576,7 +1648,7 @@
     knownKeywordKeysClear: () => knownKeywordKeys.clear(),
     isAllowedUrl, refreshUrlGate, applyGateOverlays,
     startUrlGateMonitor, stopUrlGateMonitor, stopTimeRefresh, startTimeRefresh,
-    timeAgo, postKey, markViewed, resetHitMeta,
+    timeAgo, postKey, markViewed, resetHitMeta, clearSeen, applyViewedBorders,
     postBodyText,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,

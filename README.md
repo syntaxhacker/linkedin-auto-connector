@@ -20,14 +20,19 @@ A **Chrome (Manifest V3) extension** that auto-sends LinkedIn connection request
   - 🟥 red = failed / no dialog
 
 ### 📬 Feed Email & Keyword Scanner
-- Scans your LinkedIn feed for **email addresses** and posts matching your **include keywords**
-- Floating **Found panel** with two lists (🔑 keywords / 📧 emails), each with:
+- Scans your LinkedIn feed for **email addresses** and posts matching your **include keywords** — matching reads the post body only (profile headlines are ignored)
+- Floating **Found panel** with three lists (🔑 Keyword matches / 📧 Email matches / 🙈 Hidden posts):
+  - **Keyword matches** — posts containing your include keywords
+  - **Email matches** — posts containing email addresses (a post with both shows only under emails)
+  - **Hidden posts** — posts you've collapsed via exclude keywords, each showing *why* (the matching keyword) with per-post **Show**/**Hide** and click-to-scroll
   - click-to-jump (smooth-scrolls to the post and flashes it)
   - **✓ seen chip** — green badge + green row tint once you've viewed a hit
-  - newest-first sort, ↑/↓ keyboard navigation, relative "time ago" labels
+  - **Clear seen** — removes viewed rows from the lists (a green marker stays on those feed posts until **Reset** so you know why they're gone)
+  - newest-first sort by default, relative "time ago" labels
 - **Hide posts** matching your **exclude keywords** (collapsed snippet, amber stripe; hover to peek)
-- **Auto-scroll** the feed with an optional time limit (0 = unlimited)
-- **Right-click any post → "Add post to Include/Exclude keywords"** (top 3 most frequent words are extracted)
+- **Hide non-matching posts** — a toggle that collapses every post that isn't a keyword or email match
+- **Auto-scroll** the feed with an optional time limit (0 = never)
+- **Right-click any post → "Add post to Include/Exclude keywords"** (top 3 most frequent words are extracted from the post body)
 
 ### 🎨 Accessibility-first UX
 - High-contrast dark UI with **semantic colors** (green = success, amber = in-progress/skip, red = danger/stop, blue = info)
@@ -59,10 +64,10 @@ A **Chrome (Manifest V3) extension** that auto-sends LinkedIn connection request
 | **Delay (ms)** | Random range between requests (min ≥ 500, min ≤ max) |
 
 ### Feed panel
-- **Auto-scroll to new posts** — toggle; optional stop-after (minutes)
+- **Auto-scroll feed** — toggle; optional auto-stop after N minutes
 - **Include keywords** — comma/Enter separated; `react+senior` means *all* parts must match; matching posts get an **amber outline**
-- **Exclude keywords** — matching posts collapse to a dim snippet with an amber stripe (hover to expand)
-- **Show** — reveals all hidden posts
+- **Exclude keywords** — matching posts collapse to a dim snippet with an amber stripe (hover to expand); they appear in the Found panel's **Hidden posts** list with the reason and a per-post Show/Hide
+- **Hide non-matching posts** — collapses every post that isn't a keyword or email match
 
 ---
 
@@ -70,7 +75,7 @@ A **Chrome (Manifest V3) extension** that auto-sends LinkedIn connection request
 
 ```bash
 npm install        # install jest
-npx jest           # run all tests (255 tests / 23 suites)
+npx jest           # run all tests (311 tests / 27 suites)
 ```
 
 | File | Purpose |

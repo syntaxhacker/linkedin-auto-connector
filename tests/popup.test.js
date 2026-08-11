@@ -81,7 +81,7 @@ describe('initial state', () => {
     expect(byId('btn-search').disabled).toBe(false);
     expect(byId('delay-min').value).toBe('1500');
     expect(byId('delay-max').value).toBe('3000');
-    expect(byId('status-text').textContent).toBe('Idle — open LinkedIn search page');
+    expect(byId('status-text').textContent).toBe('Idle — open Search or Feed');
     expect(byId('status-dot').className).toBe('');
   });
 
@@ -104,7 +104,7 @@ describe('STATUS → updateUI', () => {
     responses.STATUS = { connected: 0, skipped: 0, running: false, total: 0 };
     loadPopup();
     expect(byId('status-dot').className).toBe('');
-    expect(byId('status-text').textContent).toBe('Idle — open LinkedIn search page');
+    expect(byId('status-text').textContent).toBe('Idle — open Search or Feed');
   });
 });
 
@@ -158,7 +158,7 @@ describe('START / STOP state machine', () => {
     expect(byId('btn-start').disabled).toBe(false); // a scan happened earlier
     expect(byId('btn-stop').disabled).toBe(true);
     expect(byId('status-dot').className).toBe('');
-    expect(byId('status-text').textContent).toBe('Idle — open LinkedIn search page');
+    expect(byId('status-text').textContent).toBe('Idle — open Search or Feed');
     expect(byId('log').textContent).toBe('⏹ Stopped.');
   });
 

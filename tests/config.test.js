@@ -35,6 +35,7 @@ describe('content.js initialization', () => {
       'startAutoScroll', 'stopAutoScroll', 'disableAutoScroll',
       'getAutoScrollDurationMin', 'setAutoScrollDurationMin',
       'revealHiddenPost', 'rehidePost', 'applyUltraHide',
+      'clearSeen', 'applyViewedBorders',
       'knownEmailsAdd', 'knownEmailsClear', 'timeAgo',
       'postKey', 'markViewed', 'resetHitMeta', 'sortedHits',
       'getKwSectionCollapsed', 'setKwSectionCollapsed', 'toggleKwSection',

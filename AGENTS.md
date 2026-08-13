@@ -66,8 +66,10 @@ dashboard work needed. Steps:
    after it has passed review"** checked and confirm. Wait for the
    "Your extension was submitted for review" dialog and dismiss it.
 6. Update the store **listing** (`STORE_LISTING.md` is the single source of
-   truth — description, screenshots) whenever the feature set changes; the dev
-   console mirrors it.
+   truth — description, screenshots, Homepage/Support URLs) whenever the feature
+   set changes; the dev console mirrors it. Note: **listing fields are locked
+   while an item is pending review** — fill URL/support changes either before
+   submitting or after review passes, or they have to wait for the next release.
 7. If a change touches privacy/data handling, update `PRIVACY.md` and re-submit
    the privacy section in the store.
 8. **Create a GitHub release** for the new version (if the user asks or it's a

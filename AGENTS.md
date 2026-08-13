@@ -40,10 +40,13 @@ The extension is live on the Chrome Web Store (item id
 uploaded to the store dashboard and published**, otherwise store users never
 get the update.
 
-1. After tests pass and code is committed + pushed, open the Web Store
-   dashboard: `https://chrome.google.com/webstore/devconsole/`.
+When the user says **"publish to the store"** (or "upload/store/release this"),
+run this whole flow automatically with the **chrome-devtools MCP** — no manual
+dashboard work needed. Steps:
+
+1. Verify tests pass (`npm test`) and live behavior works (see "Fast dev loop").
 2. Bump the version in `manifest.json` (e.g. 1.4.0 → 1.4.1) if it wasn't
-   already bumped for this release.
+   already bumped for this release; commit + push it.
 3. Package the unpacked extension **into a zip** (Web Store rejects `node_modules`,
    `.git`, screenshots, etc.):
    ```bash
@@ -51,15 +54,30 @@ get the update.
    ```
    - Confirm the zip contains only store-required files and matches the repo's
      tracked sources (no `tools/`, `.pi/`, `tests/`, `.git/`).
-4. Upload the zip in the dev console (Package section), wait for review, then
-   **Publish**.
-5. Update the store **listing** (`STORE_LISTING.md` is the single source of
+4. **Upload via devtools MCP** (the dev console is usually already open in a
+   tab at `https://chrome.google.com/webstore/devconsole/.../edit/package`):
+   - `select_page` the dev console tab → snapshot → click **Upload new package**
+     → `upload_file` with `job-radar-linkedin.zip` → wait for the progress
+     dialog to clear → snapshot to confirm the **Draft** version bumped.
+   - If the dev console isn't open, `new_page` it (item
+     `fohdibajaklenoedegbhabemcogdcfke`) — Chrome keeps you logged in.
+5. **Submit for review** via devtools MCP: click **Store listing** in the left
+   nav, then **Submit for review**; in the dialog keep **"Publish automatically
+   after it has passed review"** checked and confirm. Wait for the
+   "Your extension was submitted for review" dialog and dismiss it.
+6. Update the store **listing** (`STORE_LISTING.md` is the single source of
    truth — description, screenshots) whenever the feature set changes; the dev
    console mirrors it.
-6. If a change touches privacy/data handling, update `PRIVACY.md` and re-submit
+7. If a change touches privacy/data handling, update `PRIVACY.md` and re-submit
    the privacy section in the store.
-7. Always verify the live behavior locally first (see "Fast dev loop") before
-   uploading to the store.
+8. **Create a GitHub release** for the new version (if the user asks or it's a
+   new version):
+   ```bash
+   git tag -a v<version> -m "Release v<version> — <summary>"
+   git push origin v<version>
+   gh release create v<version> job-radar-linkedin.zip --title "Job Radar for LinkedIn v<version>" --notes "<changelog>"
+   ```
+   The zip asset doubles as the load-unpacked release archive.
 
 ## Architecture / single sources of truth
 

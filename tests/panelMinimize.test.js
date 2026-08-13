@@ -179,7 +179,7 @@ describe('panel minimize (control + found)', () => {
     document.getElementById('li-ac-panel').remove();
     expect(document.getElementById('li-ac-panel')).toBeNull();
 
-    sendMessage({ type: 'FEED_SCAN' }); // panelDismissed=false -> panel recreated
+    sendMessage({ type: 'FEED_SCAN' }); // detached node -> panel recreated
     await jest.advanceTimersByTimeAsync(400);
     await jest.advanceTimersByTimeAsync(400);
 

@@ -643,12 +643,6 @@
   let foundPanel = null;
   let panelData = [];
   let kwPanelData = [];
-  // True after the user clicks ✕ — the panel stays closed until the next
-  // explicit action (keyword apply, Show, FEED_SCAN, RESET) instead of being
-  // recreated by the constant observer-triggered re-scans.
-  let panelDismissed = false;
-  // Independent dismiss state for the found-lists panel.
-  let foundPanelDismissed = false;
   // Emails we've already auto-jumped to — used so the auto-scroll jump only
   // fires for NEWLY discovered emails instead of re-centering on every scan.
   const knownEmails = new Set();
@@ -947,14 +941,16 @@
   // closed it hugs the right edge instead of leaving a gap.
   function positionFoundPanel() {
     if (!foundPanel) return;
-    foundPanel.style.right = (panel && panel.isConnected) ? '348px' : '16px';
+    // The control panel never closes (minimize only), so the found panel is
+    // always offset to its left.
+    foundPanel.style.right = '348px';
   }
   function renderPanel(hits, kwHits) {
     panelData = hits;
     kwPanelData = kwHits || [];
 
     // === Control panel (right): header, auto-scroll, hidden count, keywords ===
-    if ((!panel || !panel.isConnected) && !panelDismissed) {
+    if (!panel || !panel.isConnected) {
       panel = document.createElement('div');
       panel.id = 'li-ac-panel';
       panel.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:320px;max-height:78vh;overflow:auto;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
@@ -1018,7 +1014,6 @@
       function commitKwInputs() {
         cfg.includeKeywords = merge(cfg.includeKeywords, kwIn.value);
         cfg.excludeKeywords = merge(cfg.excludeKeywords, kwEx.value);
-        panelDismissed = false;
         kwIn.value = '';
         kwEx.value = '';
         chrome.storage.sync.set({ includeKeywords: cfg.includeKeywords, excludeKeywords: cfg.excludeKeywords });
@@ -1035,7 +1030,7 @@
     }
 
     // === Found panel (immediately left of the control panel) ===
-    if ((!foundPanel || !foundPanel.isConnected) && !foundPanelDismissed) {
+    if (!foundPanel || !foundPanel.isConnected) {
       foundPanel = document.createElement('div');
       foundPanel.id = 'li-ac-found-panel';
       foundPanel.style.cssText = 'position:fixed;bottom:16px;right:348px;z-index:999999;width:320px;max-height:90vh;display:flex;flex-direction:column;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';      foundPanel.innerHTML =
@@ -1436,8 +1431,6 @@
       stopTimeRefresh();
       cfg.autoScroll = false;
       cfg.ultraHide = false;
-      panelDismissed = false; // explicit reset re-enables the panel
-      foundPanelDismissed = false;
       scrollLock.reset(); // free the viewport lock
       knownEmails.clear(); // forget jumped-to emails so they can be re-centered
       knownKeywordKeys.clear();
@@ -1460,8 +1453,6 @@
       sendResponse({ ok: true });
     }
     if (msg.type === 'FEED_SCAN') {
-      panelDismissed = false; // explicit scan re-enables the panels
-      foundPanelDismissed = false;
       scanFeed();
       sendResponse({ ok: true });
     }

@@ -1,8 +1,12 @@
 # 🕵️ Job Radar for LinkedIn
 
-![Job Radar for LinkedIn logo](assets/logo.png)
+<p align="center">
+  <img src="assets/logo.png" alt="Job Radar for LinkedIn logo" width="200" />
+</p>
 
-![Job Radar for LinkedIn](assets/chatgpt-logo.png)
+<p align="center">
+  <img src="assets/chatgpt-logo.png" alt="Job Radar for LinkedIn" width="800" />
+</p>
 
 A **Chrome (Manifest V3) extension** that finds hiring posts, email addresses, and keyword matches on your LinkedIn feed — plus a **connection assistant** that sends requests one-by-one with a safe, configurable delay.
 

@@ -260,7 +260,7 @@
     b = document.createElement('div');
     b.id = 'li-ac-badge';
     b.style.cssText = 'position:fixed;top:60px;right:16px;z-index:999999;background:' + BW.bg + ';color:' + BW.fg + ';padding:10px 14px;border-radius:8px;font:14px/1.5 sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.5);min-width:190px;border:1px solid ' + BW.border + ';';
-    b.innerHTML = '<div style="font-weight:700;font-size:15px">Job Radar</div>' +
+    b.innerHTML = '<div id="li-ac-badge-title" style="font-weight:700;font-size:15px">Job Radar</div>' +
       '<div id="li-ac-status" style="color:' + BW.muted + ';margin-top:2px;display:none">⏳ Running...</div>' +
       '<div id="li-ac-count" style="margin-top:6px;font-size:13px">Connected: <b>0</b> | Skipped: <b>0</b></div>' +
       '<div id="li-ac-log" style="margin-top:6px;font-size:12px;color:' + BW.muted + '"></div>';
@@ -271,6 +271,8 @@
   function updateBadge() {
     const c = document.getElementById('li-ac-count');
     const s = document.getElementById('li-ac-status');
+    const t = document.getElementById('li-ac-badge-title');
+    if (t) t.textContent = isRunning ? 'Connecting…' : 'Job Radar';
     if (c) c.innerHTML = 'Connected: <b style="color:' + C.okText + '">' + connected + '</b> | Skipped: <b style="color:' + C.warn + '">' + skipped + '</b>';
     if (s) { s.style.display = isRunning ? 'block' : 'none'; s.textContent = isRunning ? '⏳ Running...' : ''; s.style.color = C.warn; }
   }

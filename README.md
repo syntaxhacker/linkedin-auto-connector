@@ -1,4 +1,8 @@
-# 🔗 Job Radar for LinkedIn
+# 🕵️ Job Radar for LinkedIn
+
+![Job Radar for LinkedIn logo](assets/logo.png)
+
+![Job Radar for LinkedIn](assets/chatgpt-logo.png)
 
 A **Chrome (Manifest V3) extension** that finds hiring posts, email addresses, and keyword matches on your LinkedIn feed — plus a **connection assistant** that sends requests one-by-one with a safe, configurable delay.
 
@@ -35,11 +39,6 @@ A **Chrome (Manifest V3) extension** that finds hiring posts, email addresses, a
 - **Hide non-matching posts** — a toggle that collapses every post that isn't a keyword or email match
 - **Auto-scroll** the feed with an optional time limit (0 = never)
 - **Right-click any post → "Add post to Include/Exclude keywords"** (top 3 most frequent words are extracted from the post body)
-
-### 🎨 Accessibility-first UX
-- High-contrast dark UI with **semantic colors** (green = success, amber = in-progress/skip, red = danger/stop, blue = info)
-- All colored buttons use dark text to meet WCAG contrast ratios (7.6–12.6:1)
-- Focus rings, disabled-button states, delay-input validation, tooltips, pulsing status dot
 
 ---
 
@@ -87,14 +86,11 @@ npx jest           # run all tests (315 tests / 27 suites)
 | File | Purpose |
 |---|---|
 | `manifest.json` | MV3 manifest (content script, popup, background) |
-| `palette.js` | **Single source of truth** for colors (semantic tokens) |
 | `content.js` | Feed scanner, connect flow, floating badge + panels |
 | `popup.html` / `popup.js` | Toolbar popup: controls, counters, status, delay |
 | `background.js` | Right-click context menu wiring |
 | `tests/` | Jest suite covering scanning, filtering, connect flow, popup |
 
-### Design notes
-- Colors live in **one place** (`palette.js`) — `content.js` reads it directly, `popup.html` mirrors it via CSS variables (kept in sync)
 - Tests use an in-memory `chrome.*` mock (`jest.setup.js`); the content script exposes a `__LI_AC_TEST__` surface for tests only
 
 ---

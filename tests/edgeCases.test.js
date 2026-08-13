@@ -46,7 +46,7 @@ describe('H1/H2: connect-flow concurrency and stop-abort', () => {
     const second = sendMessage({ type: 'START', delayMin: 100, delayMax: 100 });
     expect(second.response).toEqual({ ok: true }); // coalesced, not rejected
 
-    await jest.advanceTimersByTimeAsync(1000);
+    await jest.advanceTimersByTimeAsync(3500); // 3000ms poll + 500ms no-dialog fallback
     await jest.advanceTimersByTimeAsync(2000);
     // Exactly one connect happened despite two STARTs.
     expect(global.__LI.getCounts().connected).toBe(0); // no dialog → skipped
@@ -67,7 +67,7 @@ describe('H1/H2: connect-flow concurrency and stop-abort', () => {
     document.body.appendChild(dialog);
 
     sendMessage({ type: 'START', delayMin: 100, delayMax: 100 });
-    await jest.advanceTimersByTimeAsync(500); // mid sleep(1000)
+    await jest.advanceTimersByTimeAsync(200); // mid poll, dialog not yet resolved
     sendMessage({ type: 'STOP' });
     await jest.advanceTimersByTimeAsync(3000);
 

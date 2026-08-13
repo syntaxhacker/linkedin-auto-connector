@@ -362,13 +362,18 @@
     item.el.style.outline = '3px solid ' + C.warn;
     item.el.style.boxShadow = '0 0 12px rgba(251,191,36,.35)';
     item.el.click();
-    await sleep(1000);
+
+    // LinkedIn opens the "Add a note?" dialog asynchronously — it can take a
+    // couple of seconds. Poll for it instead of giving up after one fixed wait
+    // (a premature miss silently skipped connectable people).
+    let dialog = null;
+    for (let tries = 0; tries < 10 && isRunning; tries++) {
+      await sleep(300);
+      dialog = item.el.closest('[role="dialog"]') || document.querySelector('[role="dialog"]');
+      if (dialog) break;
+    }
     if (!isRunning) return; // H2: STOP during the wait aborts before any send
 
-    // Look for the dialog. Scope the search to the clicked card first so a
-    // stale dialog from a previous iteration isn't misrouted (M5).
-    const scopedDialog = item.el.closest('[role="dialog"]');
-    const dialog = scopedDialog || document.querySelector('[role="dialog"]');
     if (dialog) {
       const btns = dialog.querySelectorAll('button');
       let sent = false;

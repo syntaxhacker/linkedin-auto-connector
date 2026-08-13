@@ -44,7 +44,7 @@ describe('START message connect flow (processNext)', () => {
     const { response } = sendMessage({ type: 'START', delayMin: 100, delayMax: 100 });
     expect(response).toEqual({ ok: true });
 
-    await jest.advanceTimersByTimeAsync(1000); // initial sleep(1000)
+    await jest.advanceTimersByTimeAsync(1000); // dialog poll finds it at ~300ms
     await jest.advanceTimersByTimeAsync(2000); // randomDelay + recursion drain
 
     expect(global.__LI.getCounts().connected).toBe(1);
@@ -60,8 +60,10 @@ describe('START message connect flow (processNext)', () => {
     const { response } = sendMessage({ type: 'START', delayMin: 100, delayMax: 100 });
     expect(response).toEqual({ ok: true });
 
-    await jest.advanceTimersByTimeAsync(1000); // sleep(1000)
-    await jest.advanceTimersByTimeAsync(2000); // sleep(500) + randomDelay + drain
+    // Dialog poll runs its full 10×300ms budget, then the no-dialog branch
+    // sleeps 500ms before counting the skip.
+    await jest.advanceTimersByTimeAsync(3500); // 3000ms poll + 500ms fallback
+    await jest.advanceTimersByTimeAsync(2000); // randomDelay + drain
 
     expect(global.__LI.getCounts().connected).toBe(0);
     expect(global.__LI.getCounts().skipped).toBe(1);
@@ -75,9 +77,9 @@ describe('START message connect flow (processNext)', () => {
 
     sendMessage({ type: 'START', delayMin: 100, delayMax: 100 });
 
-    await jest.advanceTimersByTimeAsync(1000); // sleep(1000), no dialog present
+    await jest.advanceTimersByTimeAsync(1000); // poll running, no dialog yet
     connect.textContent = 'Pending'; // LinkedIn flips the button after the click
-    await jest.advanceTimersByTimeAsync(2000); // sleep(500) + randomDelay + drain
+    await jest.advanceTimersByTimeAsync(3000); // finish poll + 500ms fallback + drain
 
     expect(global.__LI.getCounts().connected).toBe(1);
     expect(global.__LI.getCounts().skipped).toBe(0);

@@ -28,6 +28,29 @@ describe('START message connect flow (processNext)', () => {
     global.__LI.cleanup();
   });
 
+  test('retries when the dialog appears late and succeeds on the 2nd attempt', async () => {
+    jest.useFakeTimers();
+
+    const { connect } = buildPatternACard({ name: 'John Doe' });
+    connect.addEventListener('click', e => e.preventDefault());
+
+    sendMessage({ type: 'START', delayMin: 100, delayMax: 100 });
+
+    // Attempt 1: no dialog → fallback → retry. Then create the dialog before
+    // the 2nd attempt's click.
+    await jest.advanceTimersByTimeAsync(1000);
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    const sendBtn = document.createElement('button');
+    sendBtn.textContent = 'Send without note';
+    dialog.appendChild(sendBtn);
+    document.body.appendChild(dialog);
+    await jest.advanceTimersByTimeAsync(4000); // finish attempt 1, run attempt 2 + drain
+
+    expect(global.__LI.getCounts().connected).toBe(1);
+    expect(global.__LI.getCounts().skipped).toBe(0);
+  });
+
   test('clicks "Send without note" in the dialog and increments connected', async () => {
     jest.useFakeTimers();
 
@@ -51,7 +74,7 @@ describe('START message connect flow (processNext)', () => {
     expect(global.__LI.getCounts().skipped).toBe(0);
   });
 
-  test('increments skipped when no dialog appears', async () => {
+  test('increments skipped when no dialog appears (after 3 retries)', async () => {
     jest.useFakeTimers();
 
     const { connect } = buildPatternACard({ name: 'John Doe' });
@@ -60,9 +83,8 @@ describe('START message connect flow (processNext)', () => {
     const { response } = sendMessage({ type: 'START', delayMin: 100, delayMax: 100 });
     expect(response).toEqual({ ok: true });
 
-    // Dialog poll runs its full 10×300ms budget, then the no-dialog branch
-    // sleeps 500ms before counting the skip.
-    await jest.advanceTimersByTimeAsync(3500); // 3000ms poll + 500ms fallback
+    // 3 attempts, each: 3000ms poll + 500ms no-dialog fallback.
+    await jest.advanceTimersByTimeAsync(10500);
     await jest.advanceTimersByTimeAsync(2000); // randomDelay + drain
 
     expect(global.__LI.getCounts().connected).toBe(0);
@@ -79,7 +101,7 @@ describe('START message connect flow (processNext)', () => {
 
     await jest.advanceTimersByTimeAsync(1000); // poll running, no dialog yet
     connect.textContent = 'Pending'; // LinkedIn flips the button after the click
-    await jest.advanceTimersByTimeAsync(3000); // finish poll + 500ms fallback + drain
+    await jest.advanceTimersByTimeAsync(4000); // finish attempt 1 fallback + drain
 
     expect(global.__LI.getCounts().connected).toBe(1);
     expect(global.__LI.getCounts().skipped).toBe(0);
@@ -105,11 +127,12 @@ describe('START message connect flow (processNext)', () => {
     dismiss.addEventListener('click', () => dismissed++);
 
     sendMessage({ type: 'START', delayMin: 100, delayMax: 100 });
-    await jest.advanceTimersByTimeAsync(1000);
-    await jest.advanceTimersByTimeAsync(2000);
+    // 3 attempts, each: ~300ms dialog poll + dismiss + 300ms close wait.
+    await jest.advanceTimersByTimeAsync(2500);
+    await jest.advanceTimersByTimeAsync(2000); // randomDelay + drain
 
     expect(global.__LI.getCounts().connected).toBe(0);
     expect(global.__LI.getCounts().skipped).toBe(1);
-    expect(dismissed).toBe(1);
+    expect(dismissed).toBe(3);
   });
 });

@@ -361,49 +361,58 @@
     log('Connecting: ' + item.name);
     item.el.style.outline = '3px solid ' + C.warn;
     item.el.style.boxShadow = '0 0 12px rgba(251,191,36,.35)';
-    item.el.click();
 
-    // LinkedIn opens the "Add a note?" dialog asynchronously — it can take a
-    // couple of seconds. Poll for it instead of giving up after one fixed wait
-    // (a premature miss silently skipped connectable people).
-    let dialog = null;
-    for (let tries = 0; tries < 10 && isRunning; tries++) {
-      await sleep(300);
-      dialog = item.el.closest('[role="dialog"]') || document.querySelector('[role="dialog"]');
-      if (dialog) break;
-    }
-    if (!isRunning) return; // H2: STOP during the wait aborts before any send
+    // Retry the whole attempt (click -> dialog -> send) up to 3 times: the
+    // dialog can open slowly or a click can land before LinkedIn is ready.
+    let done = false;
+    for (let attempt = 1; attempt <= 3 && isRunning && !done; attempt++) {
+      if (attempt > 1) log('↻ Retrying (' + attempt + '/3): ' + item.name);
+      item.el.click();
 
-    if (dialog) {
-      const btns = dialog.querySelectorAll('button');
-      let sent = false;
-      for (const b of btns) {
-        if (b.textContent.includes('without') || b.textContent.includes('Send without')) {
-          b.style.outline = '3px solid ' + C.ok;
-          b.style.boxShadow = '0 0 16px rgba(34,197,94,.4)';
-          b.click();
-          connected++;
-          sent = true;
-          log('✅ Connected: ' + item.name);
-          item.el.style.outline = '3px solid ' + C.ok;
-          item.el.style.boxShadow = 'none';
-          break;
+      // LinkedIn opens the "Add a note?" dialog asynchronously — it can take a
+      // couple of seconds. Poll for it instead of giving up after one fixed wait
+      // (a premature miss silently skipped connectable people).
+      let dialog = null;
+      for (let tries = 0; tries < 10 && isRunning; tries++) {
+        await sleep(300);
+        dialog = item.el.closest('[role="dialog"]') || document.querySelector('[role="dialog"]');
+        if (dialog) break;
+      }
+      if (!isRunning) return; // H2: STOP during the wait aborts before any send
+
+      if (dialog) {
+        const btns = dialog.querySelectorAll('button');
+        for (const b of btns) {
+          if (b.textContent.includes('without') || b.textContent.includes('Send without')) {
+            b.style.outline = '3px solid ' + C.ok;
+            b.style.boxShadow = '0 0 16px rgba(34,197,94,.4)';
+            b.click();
+            connected++;
+            done = true;
+            log('✅ Connected: ' + item.name);
+            item.el.style.outline = '3px solid ' + C.ok;
+            item.el.style.boxShadow = 'none';
+            break;
+          }
         }
+        if (!done) {
+          const dismiss = dialog.querySelector('button[aria-label="Dismiss"]');
+          if (dismiss) dismiss.click();
+          await sleep(300); // let the dialog close before the retry click
+        }
+      } else {
+        // Direct connect or failed
+        await sleep(500);
+        if (!isRunning) return; // H2
+        const txt = (item.el.textContent || '').trim().toLowerCase();
+        if (txt === 'pending') { connected++; done = true; log('✅ Connected (direct): ' + item.name); item.el.style.outline = '3px solid ' + C.ok; }
+        else { item.el.style.outline = '3px solid ' + C.warn; }
       }
-      if (!sent) {
-        skipped++;
-        log('⏭ Skipped (no send btn): ' + item.name);
-        const dismiss = dialog.querySelector('button[aria-label="Dismiss"]');
-        if (dismiss) dismiss.click();
-        item.el.style.outline = '3px solid ' + C.warn;
-      }
-    } else {
-      // Direct connect or failed
-      await sleep(500);
-      if (!isRunning) return; // H2
-      const txt = (item.el.textContent || '').trim().toLowerCase();
-      if (txt === 'pending') { connected++; log('✅ Connected (direct): ' + item.name); item.el.style.outline = '3px solid ' + C.ok; }
-      else { skipped++; log('⏭ No dialog: ' + item.name); item.el.style.outline = '3px solid ' + C.danger; }
+    }
+    if (!done && isRunning) {
+      skipped++;
+      log('⏭ Skipped after 3 tries: ' + item.name);
+      item.el.style.outline = '3px solid ' + C.danger;
     }
     updateBadge();
     await sleep(randomDelay());

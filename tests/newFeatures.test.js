@@ -136,8 +136,6 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
   let panel;
   let found;
   beforeEach(() => {
-    const c = document.getElementById('li-ac-panel-close'); if (c) c.click();
-    const fc = document.getElementById('li-ac-found-close'); if (fc) fc.click();
     global.__LI.stopAutoScroll();
     document.body.innerHTML = '';
     global.__LI.setCfg({ ...DEFAULTS });
@@ -394,17 +392,11 @@ describe('two-panel layout (control + found)', () => {
     expect(hiddenList.style.maxHeight).toBe('35vh');
   });
 
-  test('closing the found panel leaves the control panel open (independent close)', async () => {
+  test('panels have no close button (minimize only)', async () => {
     await open();
-    document.getElementById('li-ac-found-close').click();
-    expect(document.getElementById('li-ac-found-panel')).toBeNull();
+    expect(document.getElementById('li-ac-panel-close')).toBeNull();
+    expect(document.getElementById('li-ac-found-close')).toBeNull();
     expect(document.getElementById('li-ac-panel')).not.toBeNull();
-  });
-
-  test('closing the control panel leaves the found panel open (independent close)', async () => {
-    await open();
-    document.getElementById('li-ac-panel-close').click();
-    expect(document.getElementById('li-ac-panel')).toBeNull();
     expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
   });
 
@@ -415,13 +407,11 @@ describe('two-panel layout (control + found)', () => {
     expect(document.getElementById('li-ac-found-panel')).toBeNull();
   });
 
-  test('found panel hugs the right edge when the control panel is closed', async () => {
+  test('found panel stays offset from the control panel (both always present)', async () => {
     await open();
     const found = document.getElementById('li-ac-found-panel');
     expect(found.style.right).toBe('348px');
-    document.getElementById('li-ac-panel-close').click();
-    expect(document.getElementById('li-ac-panel')).toBeNull();
-    expect(found.style.right).toBe('16px');
+    expect(document.getElementById('li-ac-panel')).not.toBeNull();
   });
 
   test('sort button shows a distinct active color (newest) vs inactive (feed order)', async () => {
@@ -444,8 +434,6 @@ describe('two-panel layout (control + found)', () => {
 describe('collapsible keywords section', () => {
   let panel;
   beforeEach(() => {
-    const c = document.getElementById('li-ac-panel-close'); if (c) c.click();
-    const fc = document.getElementById('li-ac-found-close'); if (fc) fc.click();
     global.__LI.stopAutoScroll();
     document.body.innerHTML = '';
     global.__LI.setCfg({ ...DEFAULTS });

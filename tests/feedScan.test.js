@@ -122,7 +122,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     expect(found.textContent).toContain('No email matches');
   });
 
-  test('panel close button removes the control panel, leaving the found panel open', async () => {
+  test('panels have no close button — only minimize (minimize collapses body)', async () => {
     jest.useFakeTimers();
     makePost('hello bob@example.com');
 
@@ -132,8 +132,11 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     const panel = document.getElementById('li-ac-panel');
     expect(panel).not.toBeNull();
     expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
-    panel.querySelector('#li-ac-panel-close').click();
-    expect(document.getElementById('li-ac-panel')).toBeNull();
+    expect(panel.querySelector('#li-ac-panel-close')).toBeNull();
+    expect(document.getElementById('li-ac-found-close')).toBeNull();
+
+    panel.querySelector('#li-ac-panel-min').click();
+    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('none');
     expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
   });
 

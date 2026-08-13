@@ -125,15 +125,15 @@ function resetState() {
 }
 
 /**
- * Close both floating panels (control + found) if present. Closing via the real
- * close buttons nulls the closure-held references, which is required between
- * tests so a re-scan recreates fresh panels.
+ * Close both floating panels (control + found) if present. Panels have no
+ * close button (minimize only), so tests remove the elements directly — the
+ * next renderPanel sees the detached nodes and recreates fresh panels.
  */
 function closePanels() {
-  const pc = document.getElementById('li-ac-panel-close');
-  if (pc) pc.click();
-  const fc = document.getElementById('li-ac-found-close');
-  if (fc) fc.click();
+  ['li-ac-panel', 'li-ac-found-panel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
 }
 
 module.exports = { makePost, buildPatternACard, buildPatternBButton, sendMessage, resetState, closePanels };

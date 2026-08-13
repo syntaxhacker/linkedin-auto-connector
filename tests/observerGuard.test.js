@@ -19,10 +19,6 @@ const DEFAULTS = {
 
 describe('MutationObserver (own-mutation guard)', () => {
   beforeEach(() => {
-    const closeBtn = document.getElementById('li-ac-panel-close');
-    if (closeBtn) closeBtn.click();
-    const foundClose = document.getElementById('li-ac-found-close');
-    if (foundClose) foundClose.click();
     document.body.innerHTML = '';
     global.__LI.setCfg({ ...DEFAULTS });
     global.chrome.storage.sync.set.mockClear();

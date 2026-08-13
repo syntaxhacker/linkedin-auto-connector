@@ -53,6 +53,13 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--focus); outl
 </head>
 <body>
 
+<div id="not-linkedin" style="display:none;text-align:center;padding:28px 12px;">
+  <div style="font-size:36px;margin-bottom:10px;">⚠️</div>
+  <div style="font-weight:700;font-size:14px;margin-bottom:6px;">Not on LinkedIn</div>
+  <div style="color:#888;font-size:12px;">Open a LinkedIn search page to use this extension.</div>
+</div>
+
+<div id="main">
 <header>
   <h1>Job Radar for LinkedIn</h1>
 </header>
@@ -88,6 +95,7 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--focus); outl
 
 <div class="log" id="log">Open LinkedIn → click Search → buttons glow → click Start</div>
 <div class="hint">v1.3 — Connect + feed email scanner</div>
+</div><!-- /#main -->
 
 <script src="popup.js"></script>
 </body>

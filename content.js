@@ -959,7 +959,7 @@
       panel.id = 'li-ac-panel';
       panel.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:320px;max-height:78vh;overflow:auto;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
       panel.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔗 Job Radar</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-panel-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-panel-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔗 Job Radar</span><button id="li-ac-panel-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button></div>' +
         '<div id="li-ac-panel-body">' +
         '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
           '<input type="checkbox" id="li-ac-autoscroll" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.autoScroll ? ' checked' : '') + '>' +
@@ -988,12 +988,6 @@
         '</div>' +
         '</div>';
       document.body.appendChild(panel);
-      panel.querySelector('#li-ac-panel-close').addEventListener('click', () => {
-        panelDismissed = true;
-        if (panel) { panel.remove(); panel = null; }
-        positionFoundPanel();
-        if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); stopUrlGateMonitor(); }
-      });
       const toggle = panel.querySelector('#li-ac-autoscroll');
       toggle.addEventListener('change', () => {
         cfg.autoScroll = toggle.checked;
@@ -1045,7 +1039,7 @@
       foundPanel = document.createElement('div');
       foundPanel.id = 'li-ac-found-panel';
       foundPanel.style.cssText = 'position:fixed;bottom:16px;right:348px;z-index:999999;width:320px;max-height:90vh;display:flex;flex-direction:column;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';      foundPanel.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-clear-seen" title="Remove viewed rows from the lists" style="flex:none;padding:3px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Clear seen</button><button id="li-ac-found-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-found-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-clear-seen" title="Remove viewed rows from the lists" style="flex:none;padding:3px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Clear seen</button><button id="li-ac-found-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button></span></div>' +
         '<div id="li-ac-found-body" style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
           '<span>🔑 Keyword matches</span>' +
@@ -1068,12 +1062,6 @@
         '<div id="li-ac-hidden-list" style="flex:1 1 0;min-height:18vh;max-height:35vh;overflow-y:auto;padding:6px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
         '</div>';
     document.body.appendChild(foundPanel);
-    foundPanel.querySelector('#li-ac-found-close').addEventListener('click', () => {
-      foundPanelDismissed = true;
-      if (foundPanel) { foundPanel.remove(); foundPanel = null; }
-      positionFoundPanel();
-      if (!panel && !foundPanel) { stopAutoScroll(); stopTimeRefresh(); stopUrlGateMonitor(); }
-    });
     foundPanel.querySelector('#li-ac-found-min').addEventListener('click', () => toggleFoundPanelMinimize());
     foundPanel.querySelector('#li-ac-clear-seen').addEventListener('click', () => clearSeen());
     applyFoundPanelMinimized(foundPanel);

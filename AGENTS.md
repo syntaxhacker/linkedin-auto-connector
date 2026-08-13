@@ -119,10 +119,11 @@ dashboard work needed. Steps:
 - **Focus mode** → collapses all non-matching posts.
 - **Clear seen** → removes viewed rows; green marker stays on those feed posts
   until RESET.
-- **URL gate** → extension only works on `/search` and `/feed`; elsewhere both
-  panels show a blurred notice (`applyGateOverlays`).
-- **Panel position**: Found panel hugs `right:16px` when the control panel is
-  closed (`positionFoundPanel()`).
+- **URL gate** → extension only works on `/search`, `/feed`, and
+  `/company/*/people/`; elsewhere both panels show a blurred notice
+  (`applyGateOverlays`).
+- **Panels never close** → there is no ✕ close button, only minimize
+  (`–`/`+`). Both panels stay in the DOM; RESET removes them.
 
 ## Common pitfalls (learned)
 

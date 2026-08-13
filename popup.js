@@ -8,6 +8,18 @@ stopBtn.disabled = true;
 let mounted = true;
 window.addEventListener('beforeunload', () => { mounted = false; });
 
+// On non-LinkedIn pages show ONLY the warning; hide the controls below.
+function applyPageGate(url) {
+  const onLinkedIn = !!url && url.includes('linkedin.com');
+  document.getElementById('main').style.display = onLinkedIn ? '' : 'none';
+  document.getElementById('not-linkedin').style.display = onLinkedIn ? 'none' : 'block';
+}
+
+chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+  if (!mounted || !tabs[0]) return;
+  applyPageGate(tabs[0].url || '');
+});
+
 // Status dot: 'idle' (grey) | 'active' (green, pulsing) | 'error' (red)
 function setStatus(state, text) {
   const dot = $('status-dot');

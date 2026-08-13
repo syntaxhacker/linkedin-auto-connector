@@ -156,7 +156,7 @@ describe('URL gate rendering + handlers', () => {
     restoreLocation(orig);
   });
 
-  test('panels close normally even while gated (✕ still reachable)', async () => {
+  test('minimize still works while gated (no close button, body collapses)', async () => {
     jest.useFakeTimers();
     const orig = setLocation('https://www.linkedin.com/jobs/');
     sendMessage({ type: 'FEED_SCAN' });
@@ -164,8 +164,11 @@ describe('URL gate rendering + handlers', () => {
     await jest.advanceTimersByTimeAsync(400);
 
     const found = document.getElementById('li-ac-found-panel');
-    found.querySelector('#li-ac-found-close').click();
-    expect(document.getElementById('li-ac-found-panel')).toBeNull();
+    expect(found).not.toBeNull();
+    expect(found.querySelector('#li-ac-found-close')).toBeNull();
+    found.querySelector('#li-ac-found-min').click();
+    expect(found.querySelector('#li-ac-found-body').style.display).toBe('none');
+    expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
     expect(document.getElementById('li-ac-panel')).not.toBeNull();
 
     restoreLocation(orig);
@@ -285,7 +288,7 @@ describe('URL gate lifecycle: auto-scroll, time refresh, gate monitor', () => {
     expect(row.textContent).not.toBe(frozen); // restarted -> ticks again
   });
 
-  test('dismissing both panels stops the URL gate monitor', async () => {
+  test('URL gate monitor keeps running when panels are detached (no close button)', async () => {
     jest.useFakeTimers();
     global.__LI.setCfg({ ...DEFAULTS, autoScroll: true });
     makePost('a normal post'); // feed present so a live monitor would restart auto-scroll
@@ -299,22 +302,20 @@ describe('URL gate lifecycle: auto-scroll, time refresh, gate monitor', () => {
     await jest.advanceTimersByTimeAsync(2000);
     expect(document.querySelector('.li-ac-gate-overlay')).not.toBeNull();
 
-    // Close BOTH panels: the close handlers must stop the monitor.
+    // Detach both panels (there is no close button). The monitor must keep
+    // running — the close handlers that used to stop it are gone.
     closePanels();
+    await jest.advanceTimersByTimeAsync(2000);
 
-    // Return to Search/Feed and wait well past a monitor tick. With the monitor
-    // stopped, refreshUrlGate never runs, so auto-scroll is NOT restarted
-    // (a live monitor would have called refreshUrlGate -> startAutoScroll).
+    // Return to Search/Feed: with the monitor still live, refreshUrlGate runs
+    // and auto-scroll restarts (scrolls down — the opposite of "stopped").
     restoreLocation(orig);
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(document.querySelector('.li-ac-gate-overlay')).toBeNull();
     const scroller = global.__LI.getScroller();
     scroller.scrollTop = 0;
     await jest.advanceTimersByTimeAsync(5000);
-    expect(scroller.scrollTop).toBe(0);
-
-    // The popstate listener is removed too (stopUrlGateMonitor cleans both).
-    window.dispatchEvent(new PopStateEvent('popstate'));
-    await jest.advanceTimersByTimeAsync(2500);
-    expect(scroller.scrollTop).toBe(0);
+    expect(scroller.scrollTop).toBeGreaterThan(0); // auto-scroll restarted on return
   });
 
   test('startUrlGateMonitor/stopUrlGateMonitor are idempotent', async () => {

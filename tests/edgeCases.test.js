@@ -323,7 +323,7 @@ describe('panel dismissal sticks (close survives re-scans)', () => {
     global.__LI.cleanup();
   });
 
-  test('closing the panel keeps it closed across background re-scans', async () => {
+  test('panels persist across background re-scans (no close/dismiss)', async () => {
     jest.useFakeTimers();
     global.__LI.startFeedObserver(); // cleanup() disconnects it between tests
     makePost('hello bob@example.com');
@@ -332,18 +332,16 @@ describe('panel dismissal sticks (close survives re-scans)', () => {
     await jest.advanceTimersByTimeAsync(400);
     expect(document.getElementById('li-ac-panel')).not.toBeNull();
 
-    // Close it.
-    closePanels();
-    expect(document.getElementById('li-ac-panel')).toBeNull();
-
-    // Simulate a background feed mutation → observer re-scan → renderPanel.
+    // There is no close button — panels stay in the DOM across background
+    // feed mutations (observer re-scan → renderPanel reuses the connected node).
     makePost('another post with carol@example.com');
     await jest.advanceTimersByTimeAsync(400);
     await jest.advanceTimersByTimeAsync(400);
-    expect(document.getElementById('li-ac-panel')).toBeNull(); // still closed
+    expect(document.getElementById('li-ac-panel')).not.toBeNull();
+    expect(document.getElementById('li-ac-panel-close')).toBeNull();
   });
 
-  test('FEED_SCAN re-enables the dismissed panel', async () => {
+  test('FEED_SCAN re-creates a detached panel (LinkedIn-side removal)', async () => {
     jest.useFakeTimers();
     makePost('hello bob@example.com');
     sendMessage({ type: 'FEED_SCAN' });

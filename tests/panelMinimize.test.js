@@ -65,8 +65,8 @@ describe('panel minimize (control + found)', () => {
     expect(body.style.display).toBe('none'); // body hidden
     expect(btn.textContent).toBe('+'); // button flipped to expand state
 
-    // Header (title + close button) stays visible.
-    expect(panel.querySelector('#li-ac-panel-close')).not.toBeNull();
+    // Header (title + minimize button) stays visible; no close button.
+    expect(panel.querySelector('#li-ac-panel-close')).toBeNull();
     expect(panel.textContent).toContain('Job Radar');
     expect(panel.firstElementChild.style.display).not.toBe('none');
   });
@@ -169,10 +169,14 @@ describe('panel minimize (control + found)', () => {
     expect(document.getElementById('li-ac-panel-body').style.display).toBe('');
   });
 
-  test('minimize state is honored when a panel is recreated after being closed', async () => {
+  test('minimize state is honored when a panel is recreated (no close button)', async () => {
     await openPanels();
     document.getElementById('li-ac-panel-min').click(); // panelMinimized = true
-    document.getElementById('li-ac-panel-close').click(); // panel removed
+    expect(document.getElementById('li-ac-panel-close')).toBeNull();
+
+    // Panels have no close button; remove the DOM node directly to simulate a
+    // LinkedIn-side detach. A re-scan recreates the panel.
+    document.getElementById('li-ac-panel').remove();
     expect(document.getElementById('li-ac-panel')).toBeNull();
 
     sendMessage({ type: 'FEED_SCAN' }); // panelDismissed=false -> panel recreated
@@ -196,19 +200,16 @@ describe('panel minimize (control + found)', () => {
     expect(foundBtn.style.color).toBe('rgb(0, 0, 0)');
   });
 
-  test('closing minimized panels keeps the existing close/stop behavior', async () => {
+  test('minimized panels have no close button — minimize keeps them in the DOM', async () => {
     await openPanels();
     document.getElementById('li-ac-panel-min').click();
     document.getElementById('li-ac-found-min').click();
 
-    // Close the control panel first: found panel still in the DOM -> stays.
-    document.getElementById('li-ac-panel-close').click();
-    expect(document.getElementById('li-ac-panel')).toBeNull();
+    // No close buttons exist; both panels stay present (minimize only).
+    expect(document.getElementById('li-ac-panel-close')).toBeNull();
+    expect(document.getElementById('li-ac-found-close')).toBeNull();
+    expect(document.getElementById('li-ac-panel')).not.toBeNull();
     expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
-
-    // Close the found panel too: both gone, nothing left to refresh.
-    document.getElementById('li-ac-found-close').click();
-    expect(document.getElementById('li-ac-found-panel')).toBeNull();
   });
 
   test('minimized panels stay in the DOM so time-ago refresh keeps updating labels', async () => {

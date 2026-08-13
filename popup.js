@@ -51,7 +51,7 @@ function updateUI(s) {
   if (!s) return;
   $('count-ok').textContent = s.connected || 0;
   $('count-skip').textContent = s.skipped || 0;
-  setStatus(s.running ? 'active' : 'idle', s.running ? 'Running…' : 'Idle — open Search or Feed');
+  setStatus(s.running ? 'active' : 'idle', s.running ? 'Running…' : 'Idle');
 }
 
 function saveDelay() {
@@ -112,7 +112,7 @@ stopBtn.addEventListener('click', () => {
   searchBtn.disabled = false;
   startBtn.disabled = lastScanCount <= 0;
   stopBtn.disabled = true;
-  setStatus('idle', 'Idle — open Search or Feed');
+  setStatus('idle', 'Idle');
   $('log').textContent = '⏹ Stopped.';
 });
 

@@ -1,6 +1,8 @@
-# 🔗 LinkedIn Auto-Connector
+# 🔗 Job Radar for LinkedIn
 
-A **Chrome (Manifest V3) extension** that auto-sends LinkedIn connection requests with live visual feedback, plus a **feed scanner** that finds email addresses and keyword-matching posts on your LinkedIn home feed.
+A **Chrome (Manifest V3) extension** that finds hiring posts, email addresses, and keyword matches on your LinkedIn feed — plus a **connection assistant** that sends requests one-by-one with a safe, configurable delay.
+
+> ✅ **Available on the Chrome Web Store** — [Install Job Radar for LinkedIn](https://chromewebstore.google.com/detail/job-radar-for-linkedin/fohdibajaklenoedegbhabemcogdcfke)
 
 > ⚠️ **Use responsibly.** Automating connection requests can violate LinkedIn's Terms of Service and may risk account restrictions. Keep delays reasonable, respect rate limits, and use this tool at your own risk.
 
@@ -41,9 +43,13 @@ A **Chrome (Manifest V3) extension** that auto-sends LinkedIn connection request
 
 ---
 
-## 🚀 Install (load unpacked)
+## 🚀 Install
 
-1. Download / clone this repo (or unzip the release archive)
+**Recommended:** install from the [Chrome Web Store](https://chromewebstore.google.com/detail/job-radar-for-linkedin/fohdibajaklenoedegbhabemcogdcfke) — you'll get automatic updates.
+
+### Developers: load unpacked
+
+1. Clone this repo
 2. Open `chrome://extensions`
 3. Enable **Developer mode** (toggle, top-right)
 4. Click **Load unpacked** → select the folder containing `manifest.json`
@@ -75,7 +81,7 @@ A **Chrome (Manifest V3) extension** that auto-sends LinkedIn connection request
 
 ```bash
 npm install        # install jest
-npx jest           # run all tests (311 tests / 27 suites)
+npx jest           # run all tests (315 tests / 27 suites)
 ```
 
 | File | Purpose |
@@ -90,16 +96,6 @@ npx jest           # run all tests (311 tests / 27 suites)
 ### Design notes
 - Colors live in **one place** (`palette.js`) — `content.js` reads it directly, `popup.html` mirrors it via CSS variables (kept in sync)
 - Tests use an in-memory `chrome.*` mock (`jest.setup.js`); the content script exposes a `__LI_AC_TEST__` surface for tests only
-
----
-
-## 📦 Package for sharing
-
-```bash
-zip -r ../linkedin-auto-connector.zip . -x "node_modules/*" "coverage/*" ".git/*"
-```
-
-(Or just use the release archive from GitHub.)
 
 ---
 

@@ -67,7 +67,7 @@ describe('panel minimize (control + found)', () => {
 
     // Header (title + close button) stays visible.
     expect(panel.querySelector('#li-ac-panel-close')).not.toBeNull();
-    expect(panel.textContent).toContain('LI Auto');
+    expect(panel.textContent).toContain('Job Radar');
     expect(panel.firstElementChild.style.display).not.toBe('none');
   });
 

@@ -43,7 +43,7 @@ describe('debug logging (cfg.debug)', () => {
     global.__LI.filterPosts(global.__LI.getPosts());
     expect(logSpy).toHaveBeenCalled();
     const all = logSpy.mock.calls.map(c => c.join(' ')).join('\n');
-    expect(all).toContain('[LI Auto]');
+    expect(all).toContain('[Job Radar]');
     expect(all).toContain('hidden post');
   });
 

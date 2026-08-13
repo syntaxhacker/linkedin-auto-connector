@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LinkedIn Auto-Connector",
-  "version": "1.3.0",
-  "description": "Auto-send LinkedIn connection requests with visual feedback. Click Connect → Send without note automatically.",
+  "name": "Job Radar for LinkedIn",
+  "version": "1.4.0",
+  "description": "Find LinkedIn hiring posts, emails & keyword matches. Send connection requests with a safe, configurable delay and live feedback.",
   "permissions": ["storage", "activeTab", "contextMenus"],
   "host_permissions": ["*://*.linkedin.com/*"],
   "background": {
@@ -10,7 +10,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "LinkedIn Auto-Connector"
+    "default_title": "Job Radar for LinkedIn"
   },
   "content_scripts": [
     {

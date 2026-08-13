@@ -1,4 +1,4 @@
-# LinkedIn Auto-Connector — Agent Instructions
+# Job Radar for LinkedIn — Agent Instructions
 
 Chrome MV3 extension that auto-sends connection requests and scans the LinkedIn
 feed for keyword/email matches. Content script is an IIFE exposed to tests via
@@ -9,7 +9,7 @@ feed for keyword/email matches. Content script is an IIFE exposed to tests via
 1. **Edit** `content.js` / `popup.*` / `background.js`.
 2. **Reload the extension** so the content script changes take effect (page
    reload alone is NOT enough — the extension bundle is cached):
-   - `chrome://extensions/` → find **LinkedIn Auto-Connector**
+   - `chrome://extensions/` → find **Job Radar for LinkedIn**
      (id `dfmpiljchoecpknpedpbkkjpjmmmfabn`) → click **Reload**.
    - The Reload button is the "Reload" `<button>` in that card's row. In the
      devtools snapshot it appears as `uid=…_56` inside the LinkedIn card block.
@@ -31,6 +31,35 @@ feed for keyword/email matches. Content script is an IIFE exposed to tests via
    npx jest tests/xxx.test.js            # one file
    npx jest tests/xxx.test.js -t "name"  # one test
    ```
+
+## Publish to the Chrome Web Store (after pushing)
+
+The extension is live on the Chrome Web Store (item id
+`fohdibajaklenoedegbhabemcogdcfke`, dev console under `jrohit072@gmail.com`).
+**Any pushed change that ships a user-facing feature or bug fix must also be
+uploaded to the store dashboard and published**, otherwise store users never
+get the update.
+
+1. After tests pass and code is committed + pushed, open the Web Store
+   dashboard: `https://chrome.google.com/webstore/devconsole/`.
+2. Bump the version in `manifest.json` (e.g. 1.4.0 → 1.4.1) if it wasn't
+   already bumped for this release.
+3. Package the unpacked extension **into a zip** (Web Store rejects `node_modules`,
+   `.git`, screenshots, etc.):
+   ```bash
+   zip -r job-radar-linkedin.zip manifest.json content.js background.js palette.js popup.html popup.js icons/ *_LICENSE 2>/dev/null || true
+   ```
+   - Confirm the zip contains only store-required files and matches the repo's
+     tracked sources (no `tools/`, `.pi/`, `tests/`, `.git/`).
+4. Upload the zip in the dev console (Package section), wait for review, then
+   **Publish**.
+5. Update the store **listing** (`STORE_LISTING.md` is the single source of
+   truth — description, screenshots) whenever the feature set changes; the dev
+   console mirrors it.
+6. If a change touches privacy/data handling, update `PRIVACY.md` and re-submit
+   the privacy section in the store.
+7. Always verify the live behavior locally first (see "Fast dev loop") before
+   uploading to the store.
 
 ## Architecture / single sources of truth
 

@@ -1,4 +1,4 @@
-# LinkedIn Auto-Connector — Saved Settings Reference
+# Job Radar for LinkedIn — Saved Settings Reference
 
 Copy these into the panel after reloading the extension from the new path
 (`~/Documents/Extensions/linkedin-auto-connector/`).

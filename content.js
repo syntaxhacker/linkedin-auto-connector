@@ -42,7 +42,7 @@
   function dbg() {
     if (cfg.debug && typeof console !== 'undefined' && console.log) {
       const args = Array.prototype.slice.call(arguments);
-      args.unshift('[LI Auto]');
+      args.unshift('[Job Radar]');
       console.log.apply(console, args);
     }
   }
@@ -258,7 +258,7 @@
     b = document.createElement('div');
     b.id = 'li-ac-badge';
     b.style.cssText = 'position:fixed;top:60px;right:16px;z-index:999999;background:' + BW.bg + ';color:' + BW.fg + ';padding:10px 14px;border-radius:8px;font:14px/1.5 sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.5);min-width:190px;border:1px solid ' + BW.border + ';';
-    b.innerHTML = '<div style="font-weight:700;font-size:15px">Auto-Connector</div>' +
+    b.innerHTML = '<div style="font-weight:700;font-size:15px">Job Radar</div>' +
       '<div id="li-ac-status" style="color:' + BW.muted + ';margin-top:2px;display:none">⏳ Running...</div>' +
       '<div id="li-ac-count" style="margin-top:6px;font-size:13px">Connected: <b>0</b> | Skipped: <b>0</b></div>' +
       '<div id="li-ac-log" style="margin-top:6px;font-size:12px;color:' + BW.muted + '"></div>';
@@ -344,7 +344,7 @@
       item.el.style.outlineOffset = '2px';
       item.el.style.boxShadow = '0 0 12px rgba(37,99,235,.35)';
       item.el.style.transition = 'all 0.3s';
-      item.el.title = 'LI Auto: ' + item.name;
+      item.el.title = 'Job Radar: ' + item.name;
     }
   }
 
@@ -437,11 +437,21 @@
     // Popup input is pre-filtered with .filter(Boolean), so this path is unreachable
     // in production; it exists to keep the matching contract well-defined.
     if (!kw) return false;
-    // AND-grouping: "react+senior" matches only if ALL parts appear (substring).
+    // AND-grouping: "react+senior" matches only if ALL parts appear.
     const parts = kwParts(kw);
     if (!parts.length) return false;
     const t = String(text).toLowerCase();
-    return parts.every(p => t.includes(p));
+    return parts.every(p => {
+      // Plain alphanumeric words match on word boundaries — so "qa" matches
+      // "qa manager" but NOT "Qaid", and "opt" matches "OPT" but NOT "optical".
+      // Keywords carrying punctuation (".net", "c++", "node.js", "h-1b") or
+      // spaces (multi-word phrases) keep literal substring matching so
+      // "ASP.NET" and "C++" still match exactly.
+      if (/^[a-z0-9]+$/i.test(p)) {
+        return new RegExp('(^|[^a-z0-9])' + esc(p) + '([^a-z0-9]|$)', 'i').test(text);
+      }
+      return t.includes(p);
+    });
   }
   function esc(kw) { return kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   function wordMatch(text, kw) {
@@ -947,7 +957,7 @@
       panel.id = 'li-ac-panel';
       panel.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:320px;max-height:78vh;overflow:auto;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
       panel.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔗 LI Auto</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-panel-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-panel-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔗 Job Radar</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-panel-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button><button id="li-ac-panel-close" style="background:none;border:none;color:' + BW.fg + ';font-size:20px;cursor:pointer;">✕</button></span></div>' +
         '<div id="li-ac-panel-body">' +
         '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
           '<input type="checkbox" id="li-ac-autoscroll" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.autoScroll ? ' checked' : '') + '>' +
@@ -1124,15 +1134,26 @@
         list.style.minHeight = '18vh';
       }
 
-      // Hidden list: currently-hidden posts (Show to reveal) + posts the user
-      // explicitly revealed via the list but which still match excludes (Hide).
+      // Hidden list: one unified list in feed order — exclude-hidden posts
+      // (Show to reveal) plus posts the user explicitly revealed (Hide).
+      // Rows keep their position when toggled; only the button flips.
       const hiddenList = foundPanel.querySelector('#li-ac-hidden-list');
       const hiddenCountEl = foundPanel.querySelector('#li-ac-hidden-count');
       if (hiddenList) {
-        const hiddenEls = getHiddenPosts();
-        const revealedEls = getPosts().filter(p => revealedHiddenKeys.has(postKey(p)));
-        const rows = hiddenEls.map((el, i) => hiddenRowHtml(el, i, false))
-          .concat(revealedEls.map((el, i) => hiddenRowHtml(el, i, true)));
+        const hiddenKeys = new Set(getHiddenPosts().map(postKey));
+        const rows = [];
+        // All feed posts in DOM order (hidden ones included — getPosts()
+        // filters .li-ac-hidden out, so query the h2 markers directly).
+        Array.prototype.slice.call(document.querySelectorAll('h2'))
+          .filter(h => FEED_MARKERS.includes((h.textContent || '').trim().toLowerCase()))
+          .map(h => h.parentElement)
+          .filter(Boolean)
+          .forEach(p => {
+            const key = postKey(p);
+            if (hiddenKeys.has(key) || revealedHiddenKeys.has(key)) {
+              rows.push(hiddenRowHtml(p, rows.length, revealedHiddenKeys.has(key)));
+            }
+          });
         hiddenList.innerHTML = rows.length
           ? rows.join('')
           : '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:12px;">No hidden posts</div>';

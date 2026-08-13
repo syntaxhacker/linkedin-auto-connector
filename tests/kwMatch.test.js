@@ -79,6 +79,26 @@ describe('kwMatch (exclude keywords — literal substring)', () => {
     expect(global.__LI.kwMatch('nodejs', 'node.js')).toBe(false);
   });
 
+  test('plain word "qa" matches a standalone QA role but NOT a name containing "qa"', () => {
+    expect(global.__LI.kwMatch('QA manager for our team', 'qa')).toBe(true);
+    expect(global.__LI.kwMatch('Naeem Qaid celebrates', 'qa')).toBe(false);
+    expect(global.__LI.kwMatch('quality assurance engineer', 'qa')).toBe(false);
+  });
+
+  test('plain word "opt" matches OPT but NOT "optical"', () => {
+    expect(global.__LI.kwMatch('OPT visa sponsorship available', 'opt')).toBe(true);
+    expect(global.__LI.kwMatch('optical materials for LED', 'opt')).toBe(false);
+  });
+
+  test('plain word "python" does not match inside "hypothetical"', () => {
+    expect(global.__LI.kwMatch('we need python skills', 'python')).toBe(true);
+    expect(global.__LI.kwMatch('a hypothetical scenario', 'python')).toBe(false);
+  });
+
+  test('punctuated keyword ".net" still matches inside "ASP.NET" (substring kept)', () => {
+    expect(global.__LI.kwMatch('ASP.NET developer', '.net')).toBe(true);
+  });
+
   test('empty keyword returns false for non-empty text (never matches everything)', () => {
     expect(global.__LI.kwMatch('asp.net developer', '')).toBe(false);
   });

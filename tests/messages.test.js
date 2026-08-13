@@ -103,7 +103,7 @@ describe('chrome.runtime.onMessage handler', () => {
     expect(response).toEqual({ count: 1 });
     expect(document.getElementById('li-ac-badge')).not.toBeNull();
     expect(connect.classList.contains('li-ac-hl')).toBe(true);
-    expect(connect.title).toBe('LI Auto: John Doe');
+    expect(connect.title).toBe('Job Radar: John Doe');
   });
 
   test('SCAN returns { count: 0 } when no connectable buttons exist', () => {

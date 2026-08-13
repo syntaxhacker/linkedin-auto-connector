@@ -66,7 +66,9 @@
     if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) return false;
     const path = String(l.pathname || '');
     return path === '/search' || path.startsWith('/search/') ||
-           path === '/feed' || path.startsWith('/feed/');
+           path === '/feed' || path.startsWith('/feed/') ||
+           // Company people pages list "Invite ... to connect" buttons (Pattern B).
+           /^\/company\/[^/]+\/people\/?$/.test(path);
   }
 
   // Semi-transparent + backdrop-blur overlay with a centered notice, added to

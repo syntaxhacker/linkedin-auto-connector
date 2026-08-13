@@ -48,6 +48,16 @@ describe('isAllowedUrl', () => {
     expect(global.__LI.isAllowedUrl(new URL('https://www.linkedin.com/feed/'))).toBe(true);
   });
 
+  test('true for company people pages (Invite to connect, Pattern B)', () => {
+    expect(global.__LI.isAllowedUrl(new URL('https://www.linkedin.com/company/singleinterface/people/'))).toBe(true);
+    expect(global.__LI.isAllowedUrl(new URL('https://www.linkedin.com/company/acme/people'))).toBe(true);
+  });
+
+  test('false for company pages that are NOT the people directory', () => {
+    expect(global.__LI.isAllowedUrl(new URL('https://www.linkedin.com/company/singleinterface/'))).toBe(false);
+    expect(global.__LI.isAllowedUrl(new URL('https://www.linkedin.com/company/singleinterface/people/extra/'))).toBe(false);
+  });
+
   test('false for every other LinkedIn page and non-LinkedIn hosts', () => {
     expect(global.__LI.isAllowedUrl(new URL('https://www.linkedin.com/'))).toBe(false);
     expect(global.__LI.isAllowedUrl(new URL('https://www.linkedin.com/in/johndoe'))).toBe(false);

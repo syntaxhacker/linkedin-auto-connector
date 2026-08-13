@@ -2,7 +2,7 @@
 
 A **Chrome (Manifest V3) extension** that finds hiring posts, email addresses, and keyword matches on your LinkedIn feed — plus a **connection assistant** that sends requests one-by-one with a safe, configurable delay.
 
-> ✅ **Available on the Chrome Web Store** — [Install Job Radar for LinkedIn](https://chromewebstore.google.com/detail/job-radar-for-linkedin/fohdibajaklenoedegbhabemcogdcfke)
+> ✅ **Available on the Chrome Web Store** — [Install Job Radar for LinkedIn](https://chromewebstore.google.com/detail/job-radar-for-linkedin/fohdibajaklenoedegbhabemcogdcfke) · [GitHub repo](https://github.com/syntaxhacker/linkedin-auto-connector) · [Releases](https://github.com/syntaxhacker/linkedin-auto-connector/releases)
 
 > ⚠️ **Use responsibly.** Automating connection requests can violate LinkedIn's Terms of Service and may risk account restrictions. Keep delays reasonable, respect rate limits, and use this tool at your own risk.
 
@@ -45,7 +45,7 @@ A **Chrome (Manifest V3) extension** that finds hiring posts, email addresses, a
 
 ## 🚀 Install
 
-**Recommended:** install from the [Chrome Web Store](https://chromewebstore.google.com/detail/job-radar-for-linkedin/fohdibajaklenoedegbhabemcogdcfke) — you'll get automatic updates.
+**Recommended:** install from the [Chrome Web Store](https://chromewebstore.google.com/detail/job-radar-for-linkedin/fohdibajaklenoedegbhabemcogdcfke) — you'll get automatic updates. Store-version zips are attached to each [GitHub release](https://github.com/syntaxhacker/linkedin-auto-connector/releases).
 
 ### Developers: load unpacked
 

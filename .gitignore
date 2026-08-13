@@ -4,3 +4,6 @@ coverage/
 .DS_Store
 __pycache__/
 *.csv
+.pi/
+job-radar-linkedin.zip
+store-icon.png

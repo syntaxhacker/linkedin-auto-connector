@@ -122,7 +122,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     expect(found.textContent).toContain('No email matches');
   });
 
-  test('panels have no close button — only minimize (minimize collapses body)', async () => {
+  test('panels have no close button — only minimize (minimize collapses to bubble)', async () => {
     jest.useFakeTimers();
     makePost('hello bob@example.com');
 
@@ -136,7 +136,8 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     expect(document.getElementById('li-ac-found-close')).toBeNull();
 
     panel.querySelector('#li-ac-panel-min').click();
-    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('none');
+    expect(panel.style.display).toBe('none'); // panel hidden -> bubble shown
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
     expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
   });
 

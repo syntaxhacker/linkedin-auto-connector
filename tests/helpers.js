@@ -127,10 +127,11 @@ function resetState() {
 /**
  * Close both floating panels (control + found) if present. Panels have no
  * close button (minimize only), so tests remove the elements directly — the
- * next renderPanel sees the detached nodes and recreates fresh panels.
+ * next renderPanel sees the detached nodes and recreates fresh panels. Also
+ * removes the floating bubble so no gate overlay lingers on it.
  */
 function closePanels() {
-  ['li-ac-panel', 'li-ac-found-panel'].forEach(id => {
+  ['li-ac-panel', 'li-ac-found-panel', 'li-ac-bubble'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.remove();
   });

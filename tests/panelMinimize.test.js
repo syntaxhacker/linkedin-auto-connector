@@ -2,13 +2,15 @@
 
 /**
  * Panel minimize (collapse) feature:
- *  - each floating panel (control #li-ac-panel, found #li-ac-found-panel) gets
- *    a –/+ button in its header that collapses the panel BODY while keeping the
- *    header visible;
- *  - the two panels collapse/expand INDEPENDENTLY;
- *  - state persists via chrome.storage.sync (panelMinimized / foundPanelMinimized),
- *    is honored when loaded at init, applied from storage.onChanged, and survives
- *    renderPanel re-renders (re-scans) and panel recreation.
+ *  - each floating panel (control #li-ac-panel, found #li-ac-found-panel) gets a
+ *    –/+ button in its header; clicking it collapses BOTH panels into a single
+ *    messenger-style floating bubble (#li-ac-bubble) so they never block
+ *    LinkedIn's own messaging dock;
+ *  - clicking the bubble expands both panels;
+ *  - state persists via chrome.storage.sync (panelMinimized + foundPanelMinimized,
+ *    written in sync), is honored when loaded at init, applied from
+ *    storage.onChanged, and survives renderPanel re-renders (re-scans) and
+ *    panel recreation.
  */
 
 const { makePost, sendMessage, closePanels } = require('./helpers');
@@ -22,7 +24,7 @@ const DEFAULTS = {
   debug: false
 };
 
-describe('panel minimize (control + found)', () => {
+describe('panel minimize (combined floating bubble)', () => {
   beforeEach(() => {
     closePanels();
     global.__LI.stopAutoScroll();
@@ -51,73 +53,62 @@ describe('panel minimize (control + found)', () => {
     await jest.advanceTimersByTimeAsync(400);
   }
 
-  test('minimize collapses the control panel body but keeps the header', async () => {
-    await openPanels();
-    const panel = document.getElementById('li-ac-panel');
-    const body = panel.querySelector('#li-ac-panel-body');
-    const btn = panel.querySelector('#li-ac-panel-min');
-    expect(body).not.toBeNull();
-    expect(body.style.display).toBe(''); // expanded by default
-    expect(btn.textContent).toBe('–');
-
-    btn.click();
-    expect(global.__LI.getPanelMinimized()).toBe(true);
-    expect(body.style.display).toBe('none'); // body hidden
-    expect(btn.textContent).toBe('+'); // button flipped to expand state
-
-    // Header (title + minimize button) stays visible; no close button.
-    expect(panel.querySelector('#li-ac-panel-close')).toBeNull();
-    expect(panel.textContent).toContain('Job Radar');
-    expect(panel.firstElementChild.style.display).not.toBe('none');
-  });
-
-  test('clicking minimize again restores the body', async () => {
-    await openPanels();
-    const body = document.getElementById('li-ac-panel').querySelector('#li-ac-panel-body');
-    const btn = document.getElementById('li-ac-panel-min');
-    btn.click();
-    expect(body.style.display).toBe('none');
-    btn.click();
-    expect(global.__LI.getPanelMinimized()).toBe(false);
-    expect(body.style.display).toBe('');
-    expect(btn.textContent).toBe('–');
-  });
-
-  test('both panels minimize/expand independently', async () => {
+  test('minimize collapses BOTH panels into the floating bubble', async () => {
     await openPanels();
     const panel = document.getElementById('li-ac-panel');
     const found = document.getElementById('li-ac-found-panel');
-    const foundBody = found.querySelector('#li-ac-found-body');
-    const foundBtn = found.querySelector('#li-ac-found-min');
+    const btn = panel.querySelector('#li-ac-panel-min');
+    expect(panel).not.toBeNull();
+    expect(found).not.toBeNull();
+    expect(btn.textContent).toBe('–'); // expanded by default
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('none');
 
-    // Minimize only the found panel.
-    foundBtn.click();
+    btn.click();
+    expect(global.__LI.getPanelMinimized()).toBe(true);
     expect(global.__LI.getFoundPanelMinimized()).toBe(true);
-    expect(foundBody.style.display).toBe('none');
-    expect(foundBtn.textContent).toBe('+');
-    expect(panel.querySelector('#li-ac-panel-body').style.display).not.toBe('none');
+    // Both panels hidden; the bubble is shown instead.
+    expect(panel.style.display).toBe('none');
+    expect(found.style.display).toBe('none');
+    const bubble = document.getElementById('li-ac-bubble');
+    expect(bubble).not.toBeNull();
+    expect(bubble.style.display).toBe('flex');
+    expect(bubble.style.width).toBe('56px'); // messenger-style circular bubble
+    expect(bubble.style.height).toBe('56px');
+    expect(btn.textContent).toBe('+');
+  });
 
-    // Minimize the control panel too -> both collapsed.
+  test('clicking the bubble expands both panels again', async () => {
+    await openPanels();
+    const panel = document.getElementById('li-ac-panel');
+    const found = document.getElementById('li-ac-found-panel');
     panel.querySelector('#li-ac-panel-min').click();
-    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('none');
-    expect(foundBody.style.display).toBe('none');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
 
-    // Expand only the control panel -> found stays collapsed (independent).
-    panel.querySelector('#li-ac-panel-min').click();
-    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('');
-    expect(foundBody.style.display).toBe('none');
+    document.getElementById('li-ac-bubble').click();
+    expect(global.__LI.getPanelMinimized()).toBe(false);
+    expect(global.__LI.getFoundPanelMinimized()).toBe(false);
+    expect(panel.style.display).toBe('');
+    expect(found.style.display).toBe('flex');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('none');
     expect(panel.querySelector('#li-ac-panel-min').textContent).toBe('–');
-    expect(foundBtn.textContent).toBe('+');
+  });
+
+  test('minimizing either panel collapses both (single combined bubble)', async () => {
+    await openPanels();
+    const panel = document.getElementById('li-ac-panel');
+    const found = document.getElementById('li-ac-found-panel');
+    found.querySelector('#li-ac-found-min').click(); // minimize from the found panel
+    expect(global.__LI.getPanelMinimized()).toBe(true);
+    expect(global.__LI.getFoundPanelMinimized()).toBe(true);
+    expect(panel.style.display).toBe('none');
+    expect(found.style.display).toBe('none');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
   });
 
   test('minimize state survives a renderPanel re-render (re-scan)', async () => {
     await openPanels();
     const panel = document.getElementById('li-ac-panel');
-    const body = panel.querySelector('#li-ac-panel-body');
-    const btn = panel.querySelector('#li-ac-panel-min');
-    btn.click();
-
-    document.getElementById('li-ac-found-min').click();
+    panel.querySelector('#li-ac-panel-min').click();
 
     // Re-scan re-renders panel contents; the same connected panels stay put.
     sendMessage({ type: 'FEED_SCAN' });
@@ -125,16 +116,14 @@ describe('panel minimize (control + found)', () => {
     await jest.advanceTimersByTimeAsync(400);
 
     expect(document.getElementById('li-ac-panel')).toBe(panel);
-    expect(body.style.display).toBe('none');
-    expect(btn.textContent).toBe('+');
-    expect(document.getElementById('li-ac-found-body').style.display).toBe('none');
-    expect(document.getElementById('li-ac-found-min').textContent).toBe('+');
+    expect(panel.style.display).toBe('none');
+    expect(document.getElementById('li-ac-found-panel').style.display).toBe('none');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
 
-    // Header listeners are NOT double-wired: a single click expands the panel
-    // (a doubly-wired listener would toggle twice and net back to collapsed).
-    btn.click();
+    // Header listeners are NOT double-wired: a single bubble click expands.
+    document.getElementById('li-ac-bubble').click();
     expect(global.__LI.getPanelMinimized()).toBe(false);
-    expect(body.style.display).toBe('');
+    expect(panel.style.display).toBe('');
   });
 
   test('minimize state persists via chrome.storage.sync with the right keys', async () => {
@@ -142,36 +131,32 @@ describe('panel minimize (control + found)', () => {
     global.chrome.storage.sync.set.mockClear();
 
     document.getElementById('li-ac-panel-min').click();
-    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: true });
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: true, foundPanelMinimized: true });
 
     global.chrome.storage.sync.set.mockClear();
-    document.getElementById('li-ac-found-min').click();
-    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ foundPanelMinimized: true });
-
-    global.chrome.storage.sync.set.mockClear();
-    document.getElementById('li-ac-panel-min').click(); // expand again
-    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: false });
+    document.getElementById('li-ac-bubble').click(); // expand again
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: false, foundPanelMinimized: false });
   });
 
   test('storage.onChanged applies persisted minimize changes to open panels', async () => {
     await openPanels();
-    global.__onChanged({ panelMinimized: { newValue: true } }, 'sync');
+    global.__onChanged({ panelMinimized: { newValue: true }, foundPanelMinimized: { newValue: true } }, 'sync');
     expect(global.__LI.getPanelMinimized()).toBe(true);
-    expect(document.getElementById('li-ac-panel-body').style.display).toBe('none');
-
-    global.__onChanged({ foundPanelMinimized: { newValue: true } }, 'sync');
     expect(global.__LI.getFoundPanelMinimized()).toBe(true);
-    expect(document.getElementById('li-ac-found-body').style.display).toBe('none');
-    expect(document.getElementById('li-ac-found-min').textContent).toBe('+');
+    expect(document.getElementById('li-ac-panel').style.display).toBe('none');
+    expect(document.getElementById('li-ac-found-panel').style.display).toBe('none');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
 
     // And back to expanded.
-    global.__onChanged({ panelMinimized: { newValue: false } }, 'sync');
-    expect(document.getElementById('li-ac-panel-body').style.display).toBe('');
+    global.__onChanged({ panelMinimized: { newValue: false }, foundPanelMinimized: { newValue: false } }, 'sync');
+    expect(document.getElementById('li-ac-panel').style.display).toBe('');
+    expect(document.getElementById('li-ac-found-panel').style.display).toBe('flex');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('none');
   });
 
   test('minimize state is honored when a panel is recreated (no close button)', async () => {
     await openPanels();
-    document.getElementById('li-ac-panel-min').click(); // panelMinimized = true
+    document.getElementById('li-ac-panel-min').click(); // minimized
     expect(document.getElementById('li-ac-panel-close')).toBeNull();
 
     // Panels have no close button; remove the DOM node directly to simulate a
@@ -186,8 +171,9 @@ describe('panel minimize (control + found)', () => {
     const recreated = document.getElementById('li-ac-panel');
     expect(recreated).not.toBeNull();
     expect(global.__LI.getPanelMinimized()).toBe(true);
-    expect(recreated.querySelector('#li-ac-panel-body').style.display).toBe('none');
+    expect(recreated.style.display).toBe('none');
     expect(recreated.querySelector('#li-ac-panel-min').textContent).toBe('+');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
   });
 
   test('minimize buttons use the BW monochrome accent style', async () => {
@@ -200,16 +186,17 @@ describe('panel minimize (control + found)', () => {
     expect(foundBtn.style.color).toBe('rgb(0, 0, 0)');
   });
 
-  test('minimized panels have no close button — minimize keeps them in the DOM', async () => {
+  test('minimized panels have no close button — the bubble is the restore point', async () => {
     await openPanels();
     document.getElementById('li-ac-panel-min').click();
-    document.getElementById('li-ac-found-min').click();
 
-    // No close buttons exist; both panels stay present (minimize only).
+    // No close buttons exist; panels stay in the DOM (just hidden) and the
+    // bubble is the single restore point.
     expect(document.getElementById('li-ac-panel-close')).toBeNull();
     expect(document.getElementById('li-ac-found-close')).toBeNull();
     expect(document.getElementById('li-ac-panel')).not.toBeNull();
     expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
+    expect(document.getElementById('li-ac-bubble')).not.toBeNull();
   });
 
   test('minimized panels stay in the DOM so time-ago refresh keeps updating labels', async () => {
@@ -220,7 +207,7 @@ describe('panel minimize (control + found)', () => {
     const before = ago.textContent;
 
     document.getElementById('li-ac-found-min').click();
-    expect(found.querySelector('#li-ac-found-body').style.display).toBe('none');
+    expect(found.style.display).toBe('none');
 
     // Advance past the 10s refresh interval; the hidden label still updates
     // because the minimized panel remains in the DOM.
@@ -263,18 +250,6 @@ describe('panel minimize (control + found)', () => {
     expect(emList.style.minHeight).toMatch(/vh/); // email hit present
   });
 
-  test('expanding from minimized also restores the flex body', async () => {
-    await openPanels();
-    const body = document.getElementById('li-ac-found-body');
-    const btn = document.getElementById('li-ac-found-min');
-    btn.click();
-    expect(body.style.display).toBe('none');
-    btn.click();
-    expect(global.__LI.getFoundPanelMinimized()).toBe(false);
-    expect(body.style.display).toBe('flex');
-    expect(btn.textContent).toBe('–');
-  });
-
   test('minimized state is honored when loaded from storage at init', async () => {
     jest.useFakeTimers();
     global.chrome.storage.sync.get.mockImplementationOnce((_defaults, callback) => {
@@ -307,17 +282,73 @@ describe('panel minimize (control + found)', () => {
     const panel = document.getElementById('li-ac-panel');
     const found = document.getElementById('li-ac-found-panel');
     expect(panel).not.toBeNull();
-    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('none');
+    expect(panel.style.display).toBe('none');
     expect(panel.querySelector('#li-ac-panel-min').textContent).toBe('+');
-    expect(found.querySelector('#li-ac-found-body').style.display).toBe('none');
+    expect(found.style.display).toBe('none');
     expect(found.querySelector('#li-ac-found-min').textContent).toBe('+');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
 
-    // Header still visible -> can expand back.
-    panel.querySelector('#li-ac-panel-min').click();
-    expect(panel.querySelector('#li-ac-panel-body').style.display).toBe('');
+    // Bubble click expands back.
+    document.getElementById('li-ac-bubble').click();
+    expect(panel.style.display).toBe('');
     expect(LI.getPanelMinimized()).toBe(false);
 
-    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: false });
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ panelMinimized: false, foundPanelMinimized: false });
     LI.cleanup();
+  });
+
+  test('bubble is a 56px circle (messenger-style), not a wide strip', async () => {
+    await openPanels();
+    document.getElementById('li-ac-panel-min').click();
+    const bubble = document.getElementById('li-ac-bubble');
+    expect(bubble.style.width).toBe('56px');
+    expect(bubble.style.height).toBe('56px');
+    expect(bubble.style.borderRadius).toBe('50%');
+    expect(bubble.style.position).toBe('fixed');
+  });
+
+  test('chat monitor collapses to the bubble while LinkedIn chat is open, then restores', async () => {
+    jest.useFakeTimers();
+    // A prior test may have re-required content.js (jest.isolateModules), which
+    // replaces globalThis.__LI_AC_TEST__ but not the setup-captured global.__LI.
+    // Use the current instance so sendMessage + asserts stay consistent.
+    const LI = globalThis.__LI_AC_TEST__;
+    LI.setPanelMinimized(false);
+    LI.setFoundPanelMinimized(false);
+    LI.stopChatMonitor();
+
+    makePost('React role one bob@example.com');
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    // LinkedIn chat dock opens (rising edge) -> panels collapse to the bubble.
+    const dock = document.createElement('div');
+    dock.className = 'msg-overlay-conversation-bubble';
+    document.body.appendChild(dock);
+    LI.startChatMonitor();
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(LI.isCollapsed()).toBe(true);
+    expect(LI.getPanel()).not.toBeNull();
+    expect(LI.getPanel().style.display).toBe('none');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
+    // Transient — persistence flags are untouched.
+    expect(LI.getPanelMinimized()).toBe(false);
+    expect(global.chrome.storage.sync.set).not.toHaveBeenCalledWith({ panelMinimized: true, foundPanelMinimized: true });
+
+    // Chat closes (falling edge) -> prior expanded state restored.
+    dock.remove();
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(LI.isCollapsed()).toBe(false);
+    expect(LI.getPanel().style.display).toBe('');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('none');
+    LI.stopChatMonitor();
+  });
+
+  test('chat monitor is stopped by cleanup (no leaked interval)', async () => {
+    await openPanels();
+    global.__LI.startChatMonitor();
+    global.__LI.cleanup();
+    expect(global.__LI.getPanelMinimized()).toBe(false);
   });
 });

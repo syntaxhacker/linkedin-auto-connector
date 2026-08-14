@@ -76,7 +76,7 @@
   // per panel; removing it re-enables the normal panel content.
   function applyGateOverlays() {
     const gated = !isAllowedUrl();
-    const ids = ['li-ac-panel', 'li-ac-found-panel'];
+    const ids = ['li-ac-panel', 'li-ac-found-panel', 'li-ac-bubble'];
     ids.forEach(id => {
       const p = document.getElementById(id);
       if (!p) return;
@@ -881,42 +881,105 @@
   }
   function toggleKwSection() { return setKwSectionCollapsed(!kwSectionCollapsed); }
 
-  // Collapse state for each floating panel: minimizing hides the panel BODY
-  // (everything under the header) while keeping the header visible so the
-  // panel can be expanded again. Independent per panel; persisted like
-  // kwSectionCollapsed and re-applied on every renderPanel pass.
+  // Collapse state: minimizing collapses BOTH panels into a single messenger-
+  // style floating bubble (so they never block LinkedIn's own messaging dock).
+  // Persisted via panelMinimized/foundPanelMinimized (kept in sync); the bubble
+  // is the restore point. A transient `chatCollapsed` override (LinkedIn chat
+  // open) collapses to the bubble WITHOUT writing storage, then restores.
   let panelMinimized = false;
   let foundPanelMinimized = false;
+  let chatCollapsed = false; // transient: true while LinkedIn chat forces the bubble
+  let bubble = null;
   function getPanelMinimized() { return panelMinimized; }
   function getFoundPanelMinimized() { return foundPanelMinimized; }
+  function isCollapsed() { return chatCollapsed || (panelMinimized && foundPanelMinimized); }
+  function ensureBubble() {
+    if (bubble && bubble.isConnected) return bubble;
+    // Self-heal: drop any stray bubble (e.g. a fresh module instance after a
+    // test/body reset) so getElementById never sees a duplicate.
+    const existing = document.getElementById('li-ac-bubble');
+    if (existing) existing.remove();
+    bubble = document.createElement('div');
+    bubble.id = 'li-ac-bubble';
+    bubble.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:56px;height:56px;border-radius:50%;display:none;align-items:center;justify-content:center;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';font-size:26px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.6);';
+    bubble.textContent = '\uD83D\uDD17';
+    bubble.title = 'Job Radar \u2014 click to expand';
+    bubble.addEventListener('click', () => setPanelMinimized(false));
+    document.body.appendChild(bubble);
+    return bubble;
+  }
+  // Single source of truth for collapsed/expanded visuals on both panels + bubble.
+  function applyCollapsed() {
+    const collapsed = isCollapsed();
+    if (panel) panel.style.display = collapsed ? 'none' : '';
+    if (foundPanel) foundPanel.style.display = collapsed ? 'none' : 'flex';
+    ensureBubble().style.display = collapsed ? 'flex' : 'none';
+    if (panel) {
+      const btn = panel.querySelector('#li-ac-panel-min');
+      if (btn) btn.textContent = panelMinimized ? '+' : '\u2013';
+    }
+    if (foundPanel) {
+      const btn = foundPanel.querySelector('#li-ac-found-min');
+      if (btn) btn.textContent = foundPanelMinimized ? '+' : '\u2013';
+    }
+  }
   function applyPanelMinimized(panelEl) {
     if (!panelEl) return;
-    const body = panelEl.querySelector('#li-ac-panel-body');
     const btn = panelEl.querySelector('#li-ac-panel-min');
-    if (body) body.style.display = panelMinimized ? 'none' : '';
     if (btn) btn.textContent = panelMinimized ? '+' : '\u2013';
+    applyCollapsed();
   }
   function applyFoundPanelMinimized(panelEl) {
     if (!panelEl) return;
-    const body = panelEl.querySelector('#li-ac-found-body');
     const btn = panelEl.querySelector('#li-ac-found-min');
-    if (body) body.style.display = foundPanelMinimized ? 'none' : 'flex';
     if (btn) btn.textContent = foundPanelMinimized ? '+' : '\u2013';
+    applyCollapsed();
   }
   function setPanelMinimized(v) {
-    panelMinimized = !!v;
-    chrome.storage.sync.set({ panelMinimized });
-    if (panel) applyPanelMinimized(panel);
+    v = !!v;
+    panelMinimized = v;
+    foundPanelMinimized = v; // single bubble: panels collapse/expand together
+    chatCollapsed = false;
+    chrome.storage.sync.set({ panelMinimized, foundPanelMinimized });
+    applyCollapsed();
     return panelMinimized;
   }
-  function setFoundPanelMinimized(v) {
-    foundPanelMinimized = !!v;
-    chrome.storage.sync.set({ foundPanelMinimized });
-    if (foundPanel) applyFoundPanelMinimized(foundPanel);
-    return foundPanelMinimized;
+  function setFoundPanelMinimized(v) { return setPanelMinimized(v); }
+  function togglePanelMinimize() { return setPanelMinimized(!(panelMinimized || foundPanelMinimized)); }
+  function toggleFoundPanelMinimize() { return togglePanelMinimize(); }
+
+  // === LinkedIn chat dock detection ===
+  // When LinkedIn's own messaging dock is open, collapse the panels to the
+  // bubble (transient, not persisted) so they don't overlap it; restore the
+  // prior state when the chat closes.
+  let chatMonitorTimer = null;
+  let chatWasOpen = false;
+  function isLinkedInChatOpen() {
+    const el = document.querySelector('.msg-overlay-conversation-bubble, .msg-overlay-list-bubble, [data-testid="list-messaging-dock"], .msg-overlay-conversation-bubble-header');
+    return !!(el && el.offsetParent !== null); // must be visible, not detached
   }
-  function togglePanelMinimize() { return setPanelMinimized(!panelMinimized); }
-  function toggleFoundPanelMinimize() { return setFoundPanelMinimized(!foundPanelMinimized); }
+  function chatMonitorTick() {
+    const open = isLinkedInChatOpen();
+    if (open && !chatWasOpen) {
+      // Rising edge: if panels were expanded, force-collapse to the bubble.
+      if (!(panelMinimized && foundPanelMinimized)) {
+        chatCollapsed = true;
+        applyCollapsed();
+      }
+    } else if (!open && chatWasOpen) {
+      // Falling edge: restore the persisted state.
+      if (chatCollapsed) { chatCollapsed = false; applyCollapsed(); }
+    }
+    chatWasOpen = open;
+  }
+  function startChatMonitor() {
+    stopChatMonitor();
+    chatMonitorTimer = setInterval(chatMonitorTick, 2000);
+  }
+  function stopChatMonitor() {
+    if (chatMonitorTimer) { clearInterval(chatMonitorTimer); chatMonitorTimer = null; }
+    chatWasOpen = false;
+  }
 
   // Build one panel row for a keyword/email hit: headline, snippet, time-ago,
   // and a ✓ badge once viewed.
@@ -1078,6 +1141,9 @@
     applyFoundPanelMinimized(foundPanel);
     positionFoundPanel();
   }
+
+  // Reflect the collapsed/expanded state (both panels + the floating bubble).
+  applyCollapsed();
 
   startTimeRefresh();
 
@@ -1457,6 +1523,8 @@
       removeBadge();
       if (panel) { panel.remove(); panel = null; } // full reset clears the panel UI
       if (foundPanel) { foundPanel.remove(); foundPanel = null; }
+      if (bubble) { bubble.remove(); bubble = null; }
+      chatCollapsed = false;
       document.querySelectorAll('.li-ac-hl').forEach(el => { el.style.outline = ''; el.style.boxShadow = ''; el.classList.remove('li-ac-hl'); });
       clearKeywordHighlights();
       restoreHidden();
@@ -1492,6 +1560,7 @@
     if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
     stopAutoScroll();
     stopTimeRefresh();
+    stopChatMonitor();
     scrollLock.reset();
     if (feedObserver) { feedObserver.disconnect(); }
   }
@@ -1592,6 +1661,7 @@
         renderGatedPanels(); // URL gate: show blurred notice panels immediately
       }
       startUrlGateMonitor(); // SPA nav: re-evaluate on popstate + every 2s
+      startChatMonitor(); // collapse to bubble while LinkedIn's chat dock is open
     }
   );
 
@@ -1608,11 +1678,19 @@
     }
     if (changes.panelMinimized) {
       panelMinimized = !!changes.panelMinimized.newValue;
-      if (panel) applyPanelMinimized(panel);
+      if (changes.foundPanelMinimized) {
+        foundPanelMinimized = !!changes.foundPanelMinimized.newValue;
+      } else {
+        foundPanelMinimized = panelMinimized; // single bubble: keep both in sync
+      }
+      chatCollapsed = false;
+      applyCollapsed();
     }
-    if (changes.foundPanelMinimized) {
+    if (changes.foundPanelMinimized && !changes.panelMinimized) {
       foundPanelMinimized = !!changes.foundPanelMinimized.newValue;
-      if (foundPanel) applyFoundPanelMinimized(foundPanel);
+      panelMinimized = foundPanelMinimized; // single bubble: keep both in sync
+      chatCollapsed = false;
+      applyCollapsed();
     }
     if (changes.autoScrollDurationMin) {
       autoScrollDurationMin = Math.max(0, Math.floor(Number(changes.autoScrollDurationMin.newValue) || 0));
@@ -1671,9 +1749,11 @@
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,
+    isCollapsed, isLinkedInChatOpen, startChatMonitor, stopChatMonitor,
     hitMeta: () => hitMeta,
     getPanel: () => document.getElementById('li-ac-panel'),
     getFoundPanel: () => document.getElementById('li-ac-found-panel'),
+    getBubble: () => document.getElementById('li-ac-bubble'),
     getCfg: () => cfg,
     setCfg: o => { cfg = Object.assign({}, cfg, o); },
     getCounts: () => ({ connected, skipped, failed }),

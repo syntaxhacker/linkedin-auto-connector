@@ -156,7 +156,7 @@ describe('URL gate rendering + handlers', () => {
     restoreLocation(orig);
   });
 
-  test('minimize still works while gated (no close button, body collapses)', async () => {
+  test('minimize still works while gated (no close button, collapses to bubble)', async () => {
     jest.useFakeTimers();
     const orig = setLocation('https://www.linkedin.com/jobs/');
     sendMessage({ type: 'FEED_SCAN' });
@@ -167,7 +167,8 @@ describe('URL gate rendering + handlers', () => {
     expect(found).not.toBeNull();
     expect(found.querySelector('#li-ac-found-close')).toBeNull();
     found.querySelector('#li-ac-found-min').click();
-    expect(found.querySelector('#li-ac-found-body').style.display).toBe('none');
+    expect(found.style.display).toBe('none'); // panel hidden -> bubble shown
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
     expect(document.getElementById('li-ac-found-panel')).not.toBeNull();
     expect(document.getElementById('li-ac-panel')).not.toBeNull();
 

@@ -351,4 +351,183 @@ describe('panel minimize (combined floating bubble)', () => {
     global.__LI.cleanup();
     expect(global.__LI.getPanelMinimized()).toBe(false);
   });
+
+  test('repeated expand/collapse cycles stay stable (10 rounds)', async () => {
+    await openPanels();
+    const panel = document.getElementById('li-ac-panel');
+    const found = document.getElementById('li-ac-found-panel');
+    const bubble = document.getElementById('li-ac-bubble');
+    for (let i = 0; i < 10; i++) {
+      panel.querySelector('#li-ac-panel-min').click(); // collapse
+      expect(panel.style.display).toBe('none');
+      expect(found.style.display).toBe('none');
+      expect(bubble.style.display).toBe('flex');
+      bubble.click(); // expand
+      expect(panel.style.display).toBe('');
+      expect(found.style.display).toBe('flex');
+      expect(bubble.style.display).toBe('none');
+    }
+  });
+
+  test('self-heals a stale panel left in the DOM by a previous script instance', async () => {
+    // Simulate extension-reload-without-page-reload: the module's original
+    // panel is gone (LinkedIn detached it), and a stale #li-ac-panel node with
+    // NO listeners sits in the DOM from an old content script.
+    await openPanels();
+    const original = document.getElementById('li-ac-panel');
+    original.remove(); // module's `panel.isConnected` becomes false
+
+    const stale = document.createElement('div');
+    stale.id = 'li-ac-panel';
+    document.body.appendChild(stale);
+
+    // A re-scan must drop the stale node and recreate one with live listeners.
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    expect(document.querySelectorAll('#li-ac-panel').length).toBe(1);
+    const fresh = document.getElementById('li-ac-panel');
+    expect(fresh).not.toBe(stale);
+    // Fresh panel is functional.
+    fresh.querySelector('#li-ac-panel-min').click();
+    expect(fresh.style.display).toBe('none');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
+  });
+
+  test('self-heals a stale found panel left in the DOM by a previous script instance', async () => {
+    await openPanels();
+    document.getElementById('li-ac-found-panel').remove(); // detach module node
+
+    const stale = document.createElement('div');
+    stale.id = 'li-ac-found-panel';
+    document.body.appendChild(stale);
+
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    expect(document.querySelectorAll('#li-ac-found-panel').length).toBe(1);
+    const fresh = document.getElementById('li-ac-found-panel');
+    expect(fresh).not.toBe(stale);
+  });
+
+  test('bubble is clickable and expands panels on a GATED page (no overlay swallows it)', async () => {
+    jest.useFakeTimers();
+    // A prior test may have re-required content.js (jest.isolateModules); use the
+    // current instance so sendMessage + asserts stay consistent.
+    const LI = globalThis.__LI_AC_TEST__;
+    LI.setPanelMinimized(false);
+    LI.setFoundPanelMinimized(false);
+    LI.stopChatMonitor();
+    // Non-allowed URL (e.g. a profile page): gate overlays apply to panels.
+    const orig = window.location;
+    delete window.location;
+    window.location = new URL('https://www.linkedin.com/in/patelshivali/');
+    try {
+      LI.setCfg({ autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, debug: false });
+      makePost('a post');
+      sendMessage({ type: 'FEED_SCAN' });
+      await jest.advanceTimersByTimeAsync(400);
+      await jest.advanceTimersByTimeAsync(400);
+
+      const panel = document.getElementById('li-ac-panel');
+      const found = document.getElementById('li-ac-found-panel');
+      const bubble = document.getElementById('li-ac-bubble');
+      expect(panel).not.toBeNull();
+      expect(found).not.toBeNull();
+      expect(panel.querySelector('.li-ac-gate-overlay')).not.toBeNull();
+      expect(found.querySelector('.li-ac-gate-overlay')).not.toBeNull();
+      // The bubble itself must NOT carry the gate overlay (it would cover it).
+      expect(bubble.querySelector('.li-ac-gate-overlay')).toBeNull();
+
+      // Collapse to bubble -> it is visible and NOT covered by any overlay.
+      panel.querySelector('#li-ac-panel-min').click();
+      expect(panel.style.display).toBe('none');
+      expect(bubble.style.display).toBe('flex');
+      expect(bubble.querySelector('.li-ac-gate-overlay')).toBeNull();
+
+      // Clicking the bubble expands both panels even while gated.
+      bubble.click();
+      expect(panel.style.display).toBe('');
+      expect(found.style.display).toBe('flex');
+      expect(bubble.style.display).toBe('none');
+      LI.stopChatMonitor();
+    } finally {
+      Object.defineProperty(window, 'location', { value: orig, configurable: true });
+    }
+  });
+
+  test('expand/collapse works on a company people page URL (allowed)', async () => {
+    jest.useFakeTimers();
+    const orig = window.location;
+    delete window.location;
+    window.location = new URL('https://www.linkedin.com/company/singleinterface/people/');
+    try {
+      makePost('a post');
+      sendMessage({ type: 'FEED_SCAN' });
+      await jest.advanceTimersByTimeAsync(400);
+      await jest.advanceTimersByTimeAsync(400);
+
+      const panel = document.getElementById('li-ac-panel');
+      expect(panel).not.toBeNull();
+      expect(panel.querySelector('.li-ac-gate-overlay')).toBeNull(); // allowed, no gate
+
+      const bubble = document.getElementById('li-ac-bubble');
+      panel.querySelector('#li-ac-panel-min').click();
+      expect(bubble.style.display).toBe('flex');
+      bubble.click();
+      expect(panel.style.display).toBe('');
+    } finally {
+      Object.defineProperty(window, 'location', { value: orig, configurable: true });
+    }
+  });
+
+  test('expand/collapse works on the feed page (allowed, no gate)', async () => {
+    await openPanels();
+    const panel = document.getElementById('li-ac-panel');
+    const found = document.getElementById('li-ac-found-panel');
+    const bubble = document.getElementById('li-ac-bubble');
+    expect(panel.style.display).toBe('');
+    expect(found.style.display).toBe('flex');
+    expect(bubble.style.display).toBe('none');
+    expect(panel.querySelector('.li-ac-gate-overlay')).toBeNull();
+
+    panel.querySelector('#li-ac-panel-min').click();
+    expect(panel.style.display).toBe('none');
+    expect(bubble.style.display).toBe('flex');
+    bubble.click();
+    expect(panel.style.display).toBe('');
+    expect(bubble.style.display).toBe('none');
+  });
+
+  test('chat monitor auto-collapse persists no state and restores on chat close', async () => {
+    jest.useFakeTimers();
+    const LI = globalThis.__LI_AC_TEST__;
+    LI.setPanelMinimized(false);
+    LI.setFoundPanelMinimized(false);
+    LI.stopChatMonitor();
+    makePost('React role one bob@example.com');
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    const dock = document.createElement('div');
+    dock.className = 'msg-overlay-conversation-bubble';
+    document.body.appendChild(dock);
+    LI.startChatMonitor();
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(LI.isCollapsed()).toBe(true);
+    expect(LI.getPanel().style.display).toBe('none');
+    expect(document.getElementById('li-ac-bubble').style.display).toBe('flex');
+    // Not persisted.
+    expect(LI.getPanelMinimized()).toBe(false);
+    expect(LI.getFoundPanelMinimized()).toBe(false);
+
+    dock.remove();
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(LI.isCollapsed()).toBe(false);
+    expect(LI.getPanel().style.display).toBe('');
+    LI.stopChatMonitor();
+  });
 });

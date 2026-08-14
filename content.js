@@ -1032,6 +1032,11 @@
 
     // === Control panel (right): header, auto-scroll, hidden count, keywords ===
     if (!panel || !panel.isConnected) {
+      // Self-heal: drop a stale #li-ac-panel left in the DOM by a previous
+      // content-script instance (extension reload without page reload) so
+      // getElementById never resolves to a node whose listeners are dead.
+      const stalePanel = document.getElementById('li-ac-panel');
+      if (stalePanel) stalePanel.remove();
       panel = document.createElement('div');
       panel.id = 'li-ac-panel';
       panel.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:320px;max-height:78vh;overflow:auto;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
@@ -1112,6 +1117,9 @@
 
     // === Found panel (immediately left of the control panel) ===
     if (!foundPanel || !foundPanel.isConnected) {
+      // Self-heal: drop a stale #li-ac-found-panel (see control panel above).
+      const staleFound = document.getElementById('li-ac-found-panel');
+      if (staleFound) staleFound.remove();
       foundPanel = document.createElement('div');
       foundPanel.id = 'li-ac-found-panel';
       foundPanel.style.cssText = 'position:fixed;bottom:16px;right:348px;z-index:999999;width:320px;max-height:90vh;display:flex;flex-direction:column;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';      foundPanel.innerHTML =

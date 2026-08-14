@@ -175,6 +175,53 @@ describe('URL gate rendering + handlers', () => {
     restoreLocation(orig);
   });
 
+  test('gate overlay is repositioned after a collapsed re-render so minimize stays clickable', async () => {
+    jest.useFakeTimers();
+    // A prior test may have left panels minimized (both flags stay in sync);
+    // reset so our panel-min click actually collapses.
+    global.__LI.setPanelMinimized(false);
+    global.__LI.setFoundPanelMinimized(false);
+    const orig = setLocation('https://www.linkedin.com/in/patelshivali/');
+    sendMessage({ type: 'FEED_SCAN' });
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    const panel = document.getElementById('li-ac-panel');
+    expect(panel).not.toBeNull();
+    expect(panel.querySelector('.li-ac-gate-overlay')).not.toBeNull();
+
+    // Collapse both panels; while display:none the header offsetHeight is 0.
+    panel.querySelector('#li-ac-panel-min').click();
+    expect(panel.style.display).toBe('none');
+
+    // A gate re-render (URL monitor / refreshUrlGate) recreates/repositions the
+    // overlay. Regression: the overlay top must be recomputed to the header
+    // height on this pass, not left at 0px from a collapsed measurement.
+    global.__LI.refreshUrlGate();
+    await jest.advanceTimersByTimeAsync(400);
+    await jest.advanceTimersByTimeAsync(400);
+
+    const ovWhileCollapsed = panel.querySelector('.li-ac-gate-overlay');
+    expect(ovWhileCollapsed).not.toBeNull();
+
+    // Expand back: the overlay must now sit BELOW the header (top == header
+    // height), so the minimize button is not covered.
+    document.getElementById('li-ac-bubble').click();
+    await jest.advanceTimersByTimeAsync(400);
+
+    const ov = panel.querySelector('.li-ac-gate-overlay');
+    expect(ov).not.toBeNull();
+    // Overlay top is recomputed on every pass to track the header (not frozen
+    // at the 0px it measured while collapsed). jsdom has no layout, so compare
+    // to the current header offsetHeight value rather than a fixed px number.
+    expect(ov.style.top).toBe(panel.firstElementChild.offsetHeight + 'px');
+    // The overlay must never swallow clicks: pointer-events:none so the header
+    // minimize button stays reachable even if the overlay is momentarily over it.
+    expect(ov.style.pointerEvents).toBe('none');
+
+    restoreLocation(orig);
+  });
+
   test('refreshUrlGate toggles: gated -> blurred notice, back to matching -> normal', async () => {
     jest.useFakeTimers();
     makePost('React role alice@example.com');

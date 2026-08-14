@@ -87,12 +87,18 @@
         if (existing) existing.remove();
         return;
       }
-      if (existing) return; // already showing
+      // Recompute the header offset on EVERY pass: the overlay must start just
+      // below the header so the minimize button stays clickable. If it was
+      // first created while the panel was collapsed (display:none), offsetHeight
+      // was 0 and the overlay would cover the header forever once expanded.
+      // pointer-events:none guarantees clicks pass through to the header even if
+      // the overlay is momentarily mispositioned (e.g. mid-toggle).
       const header = p.firstElementChild;
-      const top = header && header.offsetHeight ? header.offsetHeight + 'px' : '0px';
+      const top = (header && header.offsetHeight ? header.offsetHeight : 0) + 'px';
+      if (existing) { existing.style.top = top; return; }
       const ov = document.createElement('div');
       ov.className = 'li-ac-gate-overlay';
-      ov.style.cssText = 'position:absolute;left:0;right:0;bottom:0;top:' + top + ';z-index:6;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);color:#fff;font:14px/1.5 sans-serif;';
+      ov.style.cssText = 'position:absolute;left:0;right:0;bottom:0;top:' + top + ';z-index:6;pointer-events:none;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);color:#fff;font:14px/1.5 sans-serif;';
       ov.innerHTML = '<div><div style="font-size:30px;margin-bottom:8px;">⚠️</div>' +
         '<div style="font-weight:700;margin-bottom:4px;">Works only on LinkedIn Search &amp; Feed pages</div>' +
         '<div style="color:#ddd;font-size:12px;">Open <b>linkedin.com/search</b> or<br><b>linkedin.com/feed</b> to use this extension.</div></div>';
@@ -924,6 +930,10 @@
       const btn = foundPanel.querySelector('#li-ac-found-min');
       if (btn) btn.textContent = foundPanelMinimized ? '+' : '\u2013';
     }
+    // After a toggle the header offset may differ (0 while collapsed); re-run the
+    // gate overlay so its top tracks the header and the minimize button stays
+    // reachable (also guarded by pointer-events:none on the overlay).
+    applyGateOverlays();
   }
   function applyPanelMinimized(panelEl) {
     if (!panelEl) return;

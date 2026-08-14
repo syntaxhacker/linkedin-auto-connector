@@ -76,7 +76,9 @@
   // per panel; removing it re-enables the normal panel content.
   function applyGateOverlays() {
     const gated = !isAllowedUrl();
-    const ids = ['li-ac-panel', 'li-ac-found-panel', 'li-ac-bubble'];
+    // The bubble is excluded: a full-panel overlay would cover the 56px circle
+    // and swallow its click (top:0 when collapsed), making it unexpandable.
+    const ids = ['li-ac-panel', 'li-ac-found-panel'];
     ids.forEach(id => {
       const p = document.getElementById(id);
       if (!p) return;
@@ -901,7 +903,7 @@
     if (existing) existing.remove();
     bubble = document.createElement('div');
     bubble.id = 'li-ac-bubble';
-    bubble.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:56px;height:56px;border-radius:50%;display:none;align-items:center;justify-content:center;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';font-size:26px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.6);';
+    bubble.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:56px;height:56px;border-radius:50%;display:none;align-items:center;justify-content:center;background:' + BW.bg + ';color:' + BW.fg + ';border:2px solid ' + C.info + ';font-size:26px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.6);';
     bubble.textContent = '\uD83D\uDD17';
     bubble.title = 'Job Radar \u2014 click to expand';
     bubble.addEventListener('click', () => setPanelMinimized(false));

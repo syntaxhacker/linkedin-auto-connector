@@ -7,3 +7,8 @@ __pycache__/
 .pi/
 job-radar-linkedin.zip
 store-icon.png
+playwright-report/
+test-results/
+playwright-results.json
+playwright-results.xml
+artifacts/

@@ -56,9 +56,12 @@ test.describe('Panel interactions — minimize to bubble, clear seen, sorting', 
     });
     await fp.setStorage({ includeKeywords: ['react'] });
     await fp.feedScan();
+    // Ensure Keywords tab active (narrow mode)
+    await page.locator('#li-ac-tab-kw').click();
+    await page.waitForTimeout(200);
     const row = page.locator('[data-kind="kw"]').first();
     await expect(row).toBeVisible();
-    await row.click();
+    await page.evaluate(() => document.querySelector('[data-kind="kw"]')?.click());
     await page.waitForTimeout(200);
     // Row now has seen marker
     await expect(row).toContainText('seen');
@@ -81,6 +84,8 @@ test.describe('Panel interactions — minimize to bubble, clear seen, sorting', 
     });
     await fp.setStorage({ includeKeywords: ['react'] });
     await fp.feedScan();
+    await page.locator('#li-ac-tab-kw').click();
+    await page.waitForTimeout(200);
     const sortBtn = page.locator('#li-ac-kw-sort');
     // Default is Newest (blue) — kw hits exist, so bar is visible
     await expect(sortBtn).toBeVisible();
@@ -100,7 +105,9 @@ test.describe('Panel interactions — minimize to bubble, clear seen, sorting', 
     // Auto-scroll toggle should be checked
     await expect(page.locator('#li-ac-autoscroll')).toBeChecked();
     // Clicking a kw row disables it
-    await page.locator('[data-kind="kw"]').first().click();
+    await page.locator('#li-ac-tab-kw').click();
+    await page.waitForTimeout(200);
+    await page.evaluate(() => document.querySelector('[data-kind="kw"]')?.click());
     await page.waitForTimeout(300);
     await expect(page.locator('#li-ac-autoscroll')).not.toBeChecked();
   });

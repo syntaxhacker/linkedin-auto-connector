@@ -1,6 +1,6 @@
 {
   "name": "linkedin-auto-connector",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "private": true,
   "description": "Unit tests for the Job Radar for LinkedIn content script (content.js)",
   "scripts": {

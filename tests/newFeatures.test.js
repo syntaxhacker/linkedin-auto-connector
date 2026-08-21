@@ -377,19 +377,19 @@ describe('two-panel layout (control + found)', () => {
     expect(found.querySelector('#li-ac-panel-list')).not.toBeNull();
   });
 
-  test('found lists have dynamic heights: hits get 18vh, empty collapses to 0', async () => {
+  test('found lists have dynamic heights: hits get 32vh, empty collapses to 0', async () => {
     await open();
     const found = document.getElementById('li-ac-found-panel');
     const kwList = found.querySelector('#li-ac-kw-list');
     const emList = found.querySelector('#li-ac-panel-list');
     // No include keywords → keyword list empty → collapsed.
     expect(kwList.style.minHeight).toBe('0');
-    // Email hits present → keeps its 18vh min.
-    expect(emList.style.minHeight).toBe('18vh');
+    // Email hits present → keeps its 32vh min.
+    expect(emList.style.minHeight).toBe('32vh');
     // The Hidden list gets a real minimum when it has rows (squeeze-proof).
     const hiddenList = found.querySelector('#li-ac-hidden-list');
     expect(hiddenList.style.minHeight).toBe('0'); // no hidden posts
-    expect(hiddenList.style.maxHeight).toBe('35vh');
+    expect(hiddenList.style.maxHeight).toBe('40vh');
   });
 
   test('panels have no close button (minimize only)', async () => {

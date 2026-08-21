@@ -38,6 +38,11 @@
   // === Feed scanner config ===
   let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true };
 
+  // === Found panel tabs + responsive layout ===
+  let foundActiveTab = 'kw'; // 'kw' | 'em' | 'hidden'
+  const FOUND_WIDE_BP = 1300;
+  function isFoundWide() { try { return window.innerWidth >= FOUND_WIDE_BP; } catch (_) { return false; } }
+
   // === Debug logging (gated by cfg.debug) ===
   function dbg() {
     if (cfg.debug && typeof console !== 'undefined' && console.log) {
@@ -257,8 +262,18 @@
       '.' + ULTRA_CARD_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
       '.' + ULTRA_CARD_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
       '.' + VIEWED_CLS + ' { box-shadow: inset 3px 0 0 ' + C.ok + '; }' +
-      '.' + HL_CLS + ' { outline: 3px solid ' + C.warn + '; outline-offset: 2px; box-shadow: 0 0 12px rgba(251,191,36,.5); transition: all 0.3s; }';
+      '.' + HL_CLS + ' { outline: 3px solid ' + C.warn + '; outline-offset: 2px; box-shadow: 0 0 12px rgba(251,191,36,.5); transition: all 0.3s; }' +
+      'div[data-componentkey="SearchResults_SearchRightRail"] { display: none !important; }' +
+      '.search-reusable-search-right-rail { display: none !important; }';
     document.head.appendChild(style);
+  }
+  function hideRightRail() {
+    try {
+      const el = document.querySelector('div[data-componentkey="SearchResults_SearchRightRail"]');
+      if (el) el.style.display = 'none';
+      const el2 = document.querySelector('.search-reusable-search-right-rail');
+      if (el2) el2.style.display = 'none';
+    } catch (_) {}
   }
 
   // === Badge UI ===
@@ -1035,6 +1050,62 @@
     // The control panel never closes (minimize only), so the found panel is
     // always offset to its left.
     foundPanel.style.right = '348px';
+    // Wide layout needs a wider panel to show columns side-by-side.
+    if (isFoundWide() && foundPanel.style.display !== 'none') {
+      foundPanel.style.width = '680px';
+    } else if (foundPanel) {
+      foundPanel.style.width = '320px';
+    }
+  }
+  function setFoundTab(tab) {
+    if (['kw','em','hidden'].indexOf(tab) === -1) return;
+    foundActiveTab = tab;
+    applyFoundLayout();
+  }
+  function applyFoundLayout() {
+    if (!foundPanel) return;
+    const tabbar = foundPanel.querySelector('#li-ac-tabbar');
+    const body = foundPanel.querySelector('#li-ac-found-body');
+    const secKw = foundPanel.querySelector('#li-ac-section-kw');
+    const secEm = foundPanel.querySelector('#li-ac-section-em');
+    const secHidden = foundPanel.querySelector('#li-ac-section-hidden');
+    const wide = isFoundWide();
+    if (tabbar) tabbar.style.display = wide ? 'none' : 'flex';
+    // Tabs: pill-style — active solid fill, inactive subtle tint
+    ['kw','em','hidden'].forEach(k => {
+      const btn = foundPanel.querySelector('#li-ac-tab-' + k);
+      if (!btn) return;
+      const active = k === foundActiveTab;
+      if (k === 'kw') {
+        btn.style.background = active ? C.warn : 'rgba(251,191,36,0.15)';
+        btn.style.color = active ? '#000' : C.warn;
+        btn.style.borderColor = active ? C.warn : 'rgba(251,191,36,0.35)';
+      } else if (k === 'em') {
+        btn.style.background = active ? C.info : 'rgba(96,165,250,0.15)';
+        btn.style.color = active ? '#000' : C.info;
+        btn.style.borderColor = active ? C.info : 'rgba(96,165,250,0.35)';
+      } else {
+        btn.style.background = active ? BW.muted : 'rgba(187,187,187,0.12)';
+        btn.style.color = active ? '#000' : BW.muted;
+        btn.style.borderColor = active ? BW.muted : 'rgba(187,187,187,0.25)';
+      }
+      btn.style.opacity = active ? '1' : '0.9';
+    });
+    if (wide) {
+      // Side-by-side: two columns on first row (kw | em), hidden full-width below
+      if (body) { body.style.flexDirection = 'row'; body.style.flexWrap = 'wrap'; body.style.overflowY = 'auto'; }
+      if (secKw) { secKw.style.display = 'flex'; secKw.style.flex = '1 1 48%'; secKw.style.minWidth = '260px'; secKw.style.borderRight = '1px solid ' + BW.border; }
+      if (secEm) { secEm.style.display = 'flex'; secEm.style.flex = '1 1 48%'; secEm.style.minWidth = '260px'; }
+      if (secHidden) { secHidden.style.display = 'flex'; secHidden.style.flex = '1 1 100%'; secHidden.style.borderTop = '1px solid ' + BW.border; }
+      foundPanel.style.maxHeight = '85vh';
+    } else {
+      if (body) { body.style.flexDirection = 'column'; body.style.flexWrap = 'nowrap'; body.style.overflowY = 'auto'; }
+      if (secKw) { secKw.style.display = foundActiveTab === 'kw' ? 'flex' : 'none'; secKw.style.flex = '1 1 auto'; secKw.style.minWidth = ''; secKw.style.borderRight = ''; }
+      if (secEm) { secEm.style.display = foundActiveTab === 'em' ? 'flex' : 'none'; secEm.style.flex = '1 1 auto'; secEm.style.minWidth = ''; }
+      if (secHidden) { secHidden.style.display = foundActiveTab === 'hidden' ? 'flex' : 'none'; secHidden.style.flex = '1 1 auto'; secHidden.style.borderTop = ''; }
+      foundPanel.style.maxHeight = '90vh';
+    }
+    positionFoundPanel();
   }
   function renderPanel(hits, kwHits) {
     panelData = hits;
@@ -1059,7 +1130,7 @@
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
           '<input type="checkbox" id="li-ac-ultra-hide" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.ultraHide ? ' checked' : '') + '>' +
-          '<label for="li-ac-ultra-hide" style="cursor:pointer;">Hide non-matching posts</label>' +
+          '<label for="li-ac-ultra-hide" style="cursor:pointer;" title="Focus mode: collapses posts that match nothing — not listed under Excluded">🎯 Focus mode</label>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid ' + BW.border + ';font-size:13px;">' +
           '<label for="li-ac-autoscroll-min" style="color:' + BW.muted + ';">Auto-stop after (min)</label>' +
@@ -1134,26 +1205,37 @@
       foundPanel.id = 'li-ac-found-panel';
       foundPanel.style.cssText = 'position:fixed;bottom:16px;right:348px;z-index:999999;width:320px;max-height:90vh;display:flex;flex-direction:column;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';      foundPanel.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔎 Found</span><span style="display:flex;align-items:center;gap:6px;"><button id="li-ac-clear-seen" title="Remove viewed rows from the lists" style="flex:none;padding:3px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Clear seen</button><button id="li-ac-found-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button></span></div>' +
-        '<div id="li-ac-found-body" style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
+        '<div id="li-ac-tabbar" style="display:flex;gap:6px;padding:8px;border-bottom:1px solid ' + BW.border + ';">' +
+          '<button id="li-ac-tab-kw" data-tab="kw" style="flex:1;padding:7px 8px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ' + C.warn + ';background:' + C.warn + ';color:#000;">🔑 Keywords <span id="li-ac-tab-kw-count" style="background:#000;color:' + C.warn + ';border-radius:10px;padding:1px 6px;margin-left:4px;font-size:11px;">0</span></button>' +
+          '<button id="li-ac-tab-em" data-tab="em" style="flex:1;padding:7px 8px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ' + C.info + ';background:rgba(96,165,250,0.15);color:' + C.info + ';">📧 Emails <span id="li-ac-tab-em-count" style="background:' + C.info + ';color:#000;border-radius:10px;padding:1px 6px;margin-left:4px;font-size:11px;">0</span></button>' +
+          '<button id="li-ac-tab-hidden" data-tab="hidden" title="Posts matching exclude keywords" style="flex:1;padding:7px 8px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ' + BW.muted + ';background:rgba(187,187,187,0.12);color:' + BW.muted + ';">🚫 Excluded <span id="li-ac-tab-hidden-count" style="background:' + BW.muted + ';color:#000;border-radius:10px;padding:1px 6px;margin-left:4px;font-size:11px;">0</span></button>' +
+        '</div>' +
+        '<div id="li-ac-found-body" style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;">' +
+        '<div id="li-ac-section-kw" style="display:flex;flex-direction:column;flex:1 1 0;min-height:0;background:rgba(251,191,36,0.06);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.warn + ';padding:8px 12px;border-bottom:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.12);">' +
           '<span>🔑 Keyword matches</span>' +
-          '<span id="li-ac-kw-sortbar" style="display:flex;gap:4px;">' +
+          '<span style="display:flex;align-items:center;gap:6px;"><span id="li-ac-kw-count" style="background:' + C.warn + ';color:#000;border-radius:10px;padding:1px 7px;font-size:11px;">0</span><span id="li-ac-kw-sortbar" style="display:flex;gap:4px;">' +
             '<button id="li-ac-kw-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
-          '</span>' +
+          '</span></span>' +
         '</div>' +
-        '<div id="li-ac-kw-list" style="flex:1 1 0;min-height:18vh;overflow-y:auto;padding:5px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
+        '<div id="li-ac-kw-list" style="flex:1 1 0;min-height:32vh;overflow-y:auto;padding:5px 8px;"></div>' +
+        '</div>' +
+        '<div id="li-ac-section-em" style="display:flex;flex-direction:column;flex:1 1 0;min-height:0;background:rgba(96,165,250,0.06);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.info + ';padding:8px 12px;border-bottom:1px solid rgba(96,165,250,0.25);background:rgba(96,165,250,0.12);">' +
           '<span>📧 Email matches</span>' +
-          '<span id="li-ac-em-sortbar" style="display:flex;gap:4px;">' +
+          '<span style="display:flex;align-items:center;gap:6px;"><span id="li-ac-em-count" style="background:' + C.info + ';color:#000;border-radius:10px;padding:1px 7px;font-size:11px;">0</span><span id="li-ac-em-sortbar" style="display:flex;gap:4px;">' +
             '<button id="li-ac-em-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
-          '</span>' +
+          '</span></span>' +
         '</div>' +
-        '<div id="li-ac-panel-list" style="flex:1 1 0;min-height:18vh;overflow-y:auto;padding:6px 8px;"></div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
-          '<span>🙈 Hidden posts</span>' +
-          '<span id="li-ac-hidden-count" style="color:' + BW.muted + ';font-size:12px;">0</span>' +
+        '<div id="li-ac-panel-list" style="flex:1 1 0;min-height:32vh;overflow-y:auto;padding:6px 8px;"></div>' +
         '</div>' +
-        '<div id="li-ac-hidden-list" style="flex:1 1 0;min-height:18vh;max-height:35vh;overflow-y:auto;padding:6px 8px;border-bottom:1px solid ' + BW.border + ';"></div>' +
+        '<div id="li-ac-section-hidden" style="display:flex;flex-direction:column;flex:1 1 0;min-height:0;background:rgba(187,187,187,0.05);">' +
+        '<div title="Posts hidden because they matched an exclude keyword" style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.muted + ';padding:8px 12px;border-bottom:1px solid rgba(187,187,187,0.2);background:rgba(187,187,187,0.10);">' +
+          '<span style="color:' + BW.muted + ';">🚫 Excluded posts</span>' +
+          '<span id="li-ac-hidden-count" style="background:' + BW.muted + ';color:#000;border-radius:10px;padding:1px 7px;font-size:11px;">0</span>' +
+        '</div>' +
+        '<div id="li-ac-hidden-list" style="flex:1 1 0;min-height:28vh;max-height:40vh;overflow-y:auto;padding:6px 8px;"></div>' +
+        '</div>' +
         '</div>';
     document.body.appendChild(foundPanel);
     foundPanel.querySelector('#li-ac-found-min').addEventListener('click', () => toggleFoundPanelMinimize());
@@ -1184,7 +1266,18 @@
     const emSortBtn = foundPanel.querySelector('#li-ac-em-sort');
     if (kwSortBtn) kwSortBtn.addEventListener('click', () => toggleSort('kw'));
     if (emSortBtn) emSortBtn.addEventListener('click', () => toggleSort('em'));
+    // Tab bar
+    ['kw','em','hidden'].forEach(k => {
+      const btn = foundPanel.querySelector('#li-ac-tab-' + k);
+      if (btn) btn.addEventListener('click', () => setFoundTab(k));
+    });
+    // Responsive resize: switch between tab mode (narrow) and side-by-side (wide)
+    if (!window.__liAcResizeBound) {
+      window.__liAcResizeBound = true;
+      window.addEventListener('resize', () => { if (foundPanel) applyFoundLayout(); });
+    }
     applySortButtons(foundPanel);
+    applyFoundLayout();
   }
 
     // Re-render contents into whichever panels exist.
@@ -1200,6 +1293,8 @@
     if (foundPanel) {
       const kwList = foundPanel.querySelector('#li-ac-kw-list');
       const kwSorted = sortedHits('kw');
+      const kwCountEl = foundPanel.querySelector('#li-ac-kw-count');
+      if (kwCountEl) kwCountEl.textContent = String(kwSorted.length);
       // Hide the section's sort/↑/↓ bar when its hit list is empty.
       setSectionBarVisible('kw', kwSorted.length > 0);
       if (!kwSorted.length) {
@@ -1207,10 +1302,12 @@
         kwList.style.minHeight = '0';
       } else {
         kwList.innerHTML = kwSorted.map((hit, i) => hitRowHtml(hit, i, 'kw')).join('');
-        kwList.style.minHeight = '18vh';
+        kwList.style.minHeight = '32vh';
       }
       const list = foundPanel.querySelector('#li-ac-panel-list');
       const emSorted = sortedHits('em');
+      const emCountEl = foundPanel.querySelector('#li-ac-em-count');
+      if (emCountEl) emCountEl.textContent = String(emSorted.length);
       // Hide the section's sort/↑/↓ bar when its hit list is empty.
       setSectionBarVisible('em', emSorted.length > 0);
       if (!emSorted.length) {
@@ -1218,7 +1315,7 @@
         list.style.minHeight = '0';
       } else {
         list.innerHTML = emSorted.map((hit, i) => hitRowHtml(hit, i, 'em')).join('');
-        list.style.minHeight = '18vh';
+        list.style.minHeight = '32vh';
       }
 
       // Hidden list: one unified list in feed order — exclude-hidden posts
@@ -1244,11 +1341,19 @@
         hiddenList.innerHTML = rows.length
           ? rows.join('')
           : '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:12px;">No hidden posts</div>';
-        hiddenList.style.minHeight = rows.length ? '18vh' : '0';
+        hiddenList.style.minHeight = rows.length ? '28vh' : '0';
         if (hiddenCountEl) hiddenCountEl.textContent = rows.length;
+        // Mirror counts to tab bar
+        const tabKw = foundPanel.querySelector('#li-ac-tab-kw-count');
+        const tabEm = foundPanel.querySelector('#li-ac-tab-em-count');
+        const tabHidden = foundPanel.querySelector('#li-ac-tab-hidden-count');
+        if (tabKw) tabKw.textContent = String(kwSorted.length);
+        if (tabEm) tabEm.textContent = String(emSorted.length);
+        if (tabHidden) tabHidden.textContent = String(rows.length);
       }
       applyFoundPanelMinimized(foundPanel);
       applySortButtons(foundPanel);
+      applyFoundLayout();
     }
     positionFoundPanel();
 
@@ -1482,6 +1587,7 @@
         return !!(node.closest && node.closest('#li-ac-panel, #li-ac-found-panel, #li-ac-styles, #li-ac-badge'));
       });
       if (own) return;
+      hideRightRail();
       scanFeed();
     });
     feedObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
@@ -1674,6 +1780,7 @@
       }
       startFeedObserver();
       injectStyles();
+      hideRightRail();
       if (isAllowedUrl()) {
         scanFeed();
         if (cfg.autoScroll) startAutoScroll();
@@ -1751,7 +1858,7 @@
   const testSurface = {
     kwMatch, kwParts, esc, wordMatch, EMAIL_RE,
     getPosts, filterPosts, scanEmails, scanKeywords, expandPosts, scanButtons,
-    restoreHidden, getHiddenCount, getHiddenPosts, clearKeywordHighlights, injectStyles,
+    restoreHidden, getHiddenCount, getHiddenPosts, clearKeywordHighlights, injectStyles, hideRightRail,
     revealHiddenPost, rehidePost, getRevealedHiddenKeys: () => revealedHiddenKeys,
     applyUltraHide,
     startFeedObserver, getScroller, renderTags, removeKeyword, escHtml,
@@ -1770,6 +1877,7 @@
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,
     isCollapsed, isLinkedInChatOpen, startChatMonitor, stopChatMonitor,
+    getFoundTab: () => foundActiveTab, setFoundTab, applyFoundLayout, isFoundWide,
     hitMeta: () => hitMeta,
     getPanel: () => document.getElementById('li-ac-panel'),
     getFoundPanel: () => document.getElementById('li-ac-found-panel'),

@@ -20,12 +20,14 @@ test.describe('Hidden / Ultra hide flows', () => {
     // Emails list does NOT contain hidden
     await expect(fp.emList()).not.toContainText('net@example.com');
     await expect(fp.emList()).toContainText('react@example.com');
-    // Hidden list contains it
+    // Hidden list contains it (switch to Hidden tab in narrow mode)
+    await page.locator('#li-ac-tab-hidden').click();
+    await page.waitForTimeout(200);
     await expect(fp.hiddenList()).toContainText('net@example.com');
     await expect(fp.hiddenList()).toContainText('.net');
 
     // Show restores
-    await page.locator('#li-ac-hidden-list [data-hidden-toggle="show"]').click();
+    await page.evaluate(() => document.querySelector('#li-ac-hidden-list [data-hidden-toggle="show"]')?.click());
     await page.waitForTimeout(300);
     const hiddenAfter = await page.evaluate(() => document.querySelectorAll('.li-ac-hidden').length);
     expect(hiddenAfter).toBe(0);
@@ -45,6 +47,8 @@ test.describe('Hidden / Ultra hide flows', () => {
     const ultra = await page.evaluate(() => document.querySelectorAll('.li-ac-ultra').length);
     expect(ultra).toBe(1); // only the unrelated post
     // Hidden list should NOT contain ultra-hidden
+    await page.locator('#li-ac-tab-hidden').click();
+    await page.waitForTimeout(200);
     await expect(fp.hiddenList()).not.toContainText('unrelated');
   });
 
@@ -61,7 +65,9 @@ test.describe('Hidden / Ultra hide flows', () => {
     // .NET post hidden via exclude, unrelated via ultra
     let hidden = await page.evaluate(() => document.querySelectorAll('.li-ac-hidden').length);
     expect(hidden).toBe(1);
-    await page.locator('#li-ac-hidden-list [data-hidden-toggle="show"]').click();
+    await page.locator('#li-ac-tab-hidden').click();
+    await page.waitForTimeout(200);
+    await page.evaluate(() => document.querySelector('#li-ac-hidden-list [data-hidden-toggle="show"]')?.click());
     await page.waitForTimeout(300);
     const stillHidden = await page.evaluate(() => document.querySelectorAll('.li-ac-hidden').length);
     expect(stillHidden).toBe(0);

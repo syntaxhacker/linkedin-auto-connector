@@ -278,8 +278,8 @@
       '.' + ULTRA_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
       '.' + ULTRA_CARD_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
       '.' + ULTRA_CARD_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
-      '.' + VIEWED_CLS + ' { box-shadow: inset 3px 0 0 ' + C.ok + '; }' +
-      '.' + HL_CLS + ' { outline: 3px solid ' + C.warn + '; outline-offset: 2px; box-shadow: 0 0 12px rgba(251,191,36,.5); transition: all 0.3s; }' +
+      '.' + VIEWED_CLS + ' { box-shadow: none !important; }' +
+      '.' + HL_CLS + ' { outline: none !important; box-shadow: none !important; }' +
       '.' + INLINE_KW_CLS + ' { background: rgba(251,191,36,0.38); border: 1px solid #fbbf24; border-radius: 3px; padding: 0 3px; font-weight: 700; color: #000; box-decoration-break: clone; }' +
       '.' + INLINE_EMAIL_CLS + ' { background: rgba(96,165,250,0.28); border: 1px solid #60a5fa; border-radius: 3px; padding: 0 3px; font-weight: 600; color: #1e3a5f; }' +
       '.' + PROMOTED_CLS + ' { background: #ef4444; border: 1px solid #dc2626; border-radius: 3px; padding: 0 3px; font-weight: 700; color: #fff; box-decoration-break: clone; }' +

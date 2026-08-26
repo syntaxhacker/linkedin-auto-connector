@@ -42,12 +42,12 @@ describe('injectStyles — full CSS audit', () => {
     expect(css).toContain('.li-ac-ultra:hover {');
     expect(css).toContain('.li-ac-ultra-card {');
     expect(css).toContain('.li-ac-ultra-card:hover {');
-    // viewed inset green
+    // viewed and keyword highlight now no glow (user request: remove glowing borders)
     expect(css).toContain('.li-ac-viewed {');
-    expect(css).toContain('box-shadow: inset 3px 0 0');
-    // keyword highlight amber outline
+    expect(css).toContain('box-shadow: none');
+    // keyword highlight amber outline removed
     expect(css).toContain('.li-ac-kw-hl {');
-    expect(css).toContain('outline: 3px solid');
+    expect(css).toContain('outline: none');
     // right rail selectors
     expect(css).toContain('div[data-componentkey="SearchResults_SearchRightRail"]');
     expect(css).toContain('.search-reusable-search-right-rail');

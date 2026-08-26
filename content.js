@@ -36,7 +36,7 @@
   };
 
   // === Feed scanner config ===
-  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, autoMarkSeen: true, highlightKeywords: [] };
+  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, autoMarkSeen: false, highlightKeywords: [] };
 
   // === Found panel tabs + responsive layout ===
   let foundActiveTab = 'kw'; // 'kw' | 'em' | 'hidden'
@@ -140,17 +140,12 @@
       scanFeed();
       if (cfg.autoScroll) startAutoScroll(); // restart auto-scroll when returning to Search/Feed
     }
-    // Toggle Highlights section visibility based on Jobs page
+    // Highlights section visible on all allowed pages (Jobs + Feed/Search)
     try {
       const hlSec = document.getElementById('li-ac-highlight-section');
-      if (hlSec) {
-        const onJobs = isJobsPage();
-        hlSec.style.display = onJobs ? '' : 'none';
-        // Update badge text if present
-        const badge = hlSec.querySelector('span:last-child');
-        // No-op: badge updated on next renderPanel
-      }
+      if (hlSec) hlSec.style.display = '';
     } catch (_) {}
+    updateJobsBodyClass();
   }
 
   let lastGateAllowed = null;
@@ -1777,17 +1772,17 @@
             '<input id="li-ac-kw-exclude" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder=".net, java, php · press Enter to add">' +
             '<div id="li-ac-tags-exclude" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;"></div>' +
           '</div>' +
-          '<div id="li-ac-highlight-section" style="padding:10px 12px;border-bottom:1px solid ' + BW.border + ';background:rgba(251,191,36,0.04);' + (isJobsPage() ? '' : 'display:none;') + '">' +
+          '<div id="li-ac-highlight-section" style="padding:10px 12px;border-bottom:1px solid ' + BW.border + ';background:rgba(251,191,36,0.04);">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.warn + ';margin-bottom:8px;">' +
               '<span>✨ Highlights — last pane</span>' +
               '<span style="font-size:10px;color:' + BW.muted + ';font-weight:400;">quick eye grab</span>' +
               '<span style="font-size:10px;color:' + (isJobsPage() ? C.ok : BW.muted) + ';border:1px solid ' + (isJobsPage() ? C.ok : BW.border) + ';border-radius:4px;padding:1px 5px;">' + (isJobsPage() ? '● Jobs' : '○ Feed') + '</span>' +
             '</div>' +
-            '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Highlight words (independent) ' + (isJobsPage() ? '' : '<span style="font-size:11px;color:' + C.warn + ';">— only on Jobs</span>') + '</div>' +
-            '<input id="li-ac-hl-input" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react, python, tanstack · Enter" ' + (isJobsPage() ? '' : 'disabled') + '>' +
+            '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Highlight words (independent)</div>' +
+            '<input id="li-ac-hl-input" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react, python, tanstack · Enter">' +
             '<div id="li-ac-tags-highlight" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>' +
-            '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;opacity:' + (isJobsPage() ? '1' : '0.6') + ';">' +
-              '<input type="checkbox" id="li-ac-hl-inline" style="accent-color:' + C.warn + ';width:15px;height:15px;"' + (cfg.highlightInline ? ' checked' : '') + ' ' + (isJobsPage() ? '' : 'disabled') + '>' +
+            '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;">' +
+              '<input type="checkbox" id="li-ac-hl-inline" style="accent-color:' + C.warn + ';width:15px;height:15px;"' + (cfg.highlightInline ? ' checked' : '') + '>' +
               '<span>Enable highlight inline</span>' +
             '</label>' +
             '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;" title="Auto-mark read after 60% visible for 2s — green border, persists globally">' +
@@ -2143,16 +2138,15 @@
         posts = getPosts(); // re-grab after filtering (hidden posts excluded)
         kwHits = scanKeywords(posts);
         emHits = cfg.scanEmails ? scanEmails(posts) : [];
-        // Independent highlight words — only on Jobs page (per user request)
-        if (isJobsPage()) {
-          const hlItems = normalizeHighlightItems(cfg.highlightKeywords);
-          if (cfg.highlightInline && hlItems.length) {
-            posts.forEach(p => {
-              const t = postBodyText(p).toLowerCase();
-              const matched = hlItems.filter(it => wordMatch(t, it.kw));
-              if (matched.length) highlightKeywordsInline(p, matched);
-            });
-            // Also highlight in JD (right side) — same keywords
+        // Independent highlight words — on all allowed pages (Jobs + Feed/Search), JD only on Jobs
+        const hlItems = normalizeHighlightItems(cfg.highlightKeywords);
+        if (cfg.highlightInline && hlItems.length) {
+          posts.forEach(p => {
+            const t = postBodyText(p).toLowerCase();
+            const matched = hlItems.filter(it => wordMatch(t, it.kw));
+            if (matched.length) highlightKeywordsInline(p, matched);
+          });
+          if (isJobsPage()) {
             const jd = getJobDetailsElement();
             if (jd) {
               const t = (jd.textContent || '').toLowerCase();
@@ -2160,12 +2154,13 @@
               if (matchedJD.length) highlightJobDetails(hlItems);
             }
           }
-          // Always highlight Promoted to avoid them — red
+        }
+        if (isJobsPage()) {
+          // Always highlight Promoted to avoid them — red (Jobs only)
           highlightPromoted(posts);
           const jdPromoted = getJobDetailsElement();
           if (jdPromoted && /Promoted/i.test(jdPromoted.textContent)) {
             highlightInElement(jdPromoted, /\bPromoted\b/gi, PROMOTED_CLS);
-            // Ensure solid red for JD promoted as well
             jdPromoted.querySelectorAll('.' + PROMOTED_CLS).forEach(m => {
               m.style.background = '#ef4444';
               m.style.borderColor = '#dc2626';
@@ -2499,11 +2494,11 @@
 
   // === Load config + init ===
   chrome.storage.sync.get(
-    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, autoMarkSeen: true, highlightKeywords: [] },
+    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, autoMarkSeen: false, highlightKeywords: [] },
     opts => {
-      // Ensure highlight defaults if missing (old installs) — migrate false → true for instant green
+      // Ensure highlight defaults if missing (old installs)
       if (opts.highlightInline === undefined) opts.highlightInline = true;
-      if (opts.autoMarkSeen === undefined) opts.autoMarkSeen = true;
+      if (opts.autoMarkSeen === undefined) opts.autoMarkSeen = false;
       if (opts.highlightKeywords === undefined) opts.highlightKeywords = [];
       opts.highlightKeywords = normalizeHighlightItems(opts.highlightKeywords);
       cfg = opts;

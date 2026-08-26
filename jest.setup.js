@@ -56,6 +56,9 @@ const STORAGE_DEFAULTS = {
   scanEmails: true,
   includeKeywords: [],
   excludeKeywords: [],
+  highlightKeywords: [],
+  highlightInline: true,
+  autoMarkSeen: true,
   autoScroll: true,
   debug: true,
   panelMinimized: false,
@@ -71,6 +74,17 @@ global.chrome = {
         callback({ ...STORAGE_DEFAULTS });
       }),
       set: jest.fn((_obj, callback) => {
+        if (typeof callback === 'function') callback();
+      })
+    },
+    local: {
+      get: jest.fn((_defaults, callback) => {
+        if (typeof callback === 'function') callback(_defaults);
+      }),
+      set: jest.fn((_obj, callback) => {
+        if (typeof callback === 'function') callback();
+      }),
+      remove: jest.fn((_key, callback) => {
         if (typeof callback === 'function') callback();
       })
     },

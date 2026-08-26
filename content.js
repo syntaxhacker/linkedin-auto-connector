@@ -36,7 +36,7 @@
   };
 
   // === Feed scanner config ===
-  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true };
+  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, autoMarkSeen: true, highlightKeywords: [] };
 
   // === Found panel tabs + responsive layout ===
   let foundActiveTab = 'kw'; // 'kw' | 'em' | 'hidden'
@@ -72,9 +72,20 @@
     const path = String(l.pathname || '');
     return path === '/search' || path.startsWith('/search/') ||
            path === '/feed' || path.startsWith('/feed/') ||
+           path === '/jobs/search' || path.startsWith('/jobs/search/') ||
            // Company people pages list "Invite ... to connect" buttons (Pattern B).
            /^\/company\/[^/]+\/people\/?$/.test(path);
   }
+  function isJobsPage(loc) {
+    const l = loc || (typeof window !== 'undefined' ? window.location : null);
+    if (!l) return false;
+    const path = String(l.pathname || '');
+    return path === '/jobs/search' || path.startsWith('/jobs/search/');
+  }
+
+  // === Inline highlight constants (last-pane highlight feature) ===
+  const INLINE_KW_CLS = 'li-ac-kw-inline';
+  const INLINE_EMAIL_CLS = 'li-ac-email-inline';
 
   // Semi-transparent + backdrop-blur overlay with a centered notice, added to
   // BOTH panels whenever the current URL is not a Search/Feed page. Idempotent
@@ -105,8 +116,8 @@
       ov.className = 'li-ac-gate-overlay';
       ov.style.cssText = 'position:absolute;left:0;right:0;bottom:0;top:' + top + ';z-index:6;pointer-events:none;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);color:#fff;font:14px/1.5 sans-serif;';
       ov.innerHTML = '<div><div style="font-size:30px;margin-bottom:8px;">⚠️</div>' +
-        '<div style="font-weight:700;margin-bottom:4px;">Works only on LinkedIn Search &amp; Feed pages</div>' +
-        '<div style="color:#ddd;font-size:12px;">Open <b>linkedin.com/search</b> or<br><b>linkedin.com/feed</b> to use this extension.</div></div>';
+        '<div style="font-weight:700;margin-bottom:4px;">Works only on LinkedIn Search, Feed &amp; Jobs pages</div>' +
+        '<div style="color:#ddd;font-size:12px;">Open <b>linkedin.com/search</b>,<br><b>linkedin.com/feed</b> or <b>linkedin.com/jobs</b> to use this extension.</div></div>';
       p.appendChild(ov);
     });
   }
@@ -129,6 +140,17 @@
       scanFeed();
       if (cfg.autoScroll) startAutoScroll(); // restart auto-scroll when returning to Search/Feed
     }
+    // Toggle Highlights section visibility based on Jobs page
+    try {
+      const hlSec = document.getElementById('li-ac-highlight-section');
+      if (hlSec) {
+        const onJobs = isJobsPage();
+        hlSec.style.display = onJobs ? '' : 'none';
+        // Update badge text if present
+        const badge = hlSec.querySelector('span:last-child');
+        // No-op: badge updated on next renderPanel
+      }
+    } catch (_) {}
   }
 
   let lastGateAllowed = null;
@@ -263,6 +285,12 @@
       '.' + ULTRA_CARD_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
       '.' + VIEWED_CLS + ' { box-shadow: inset 3px 0 0 ' + C.ok + '; }' +
       '.' + HL_CLS + ' { outline: 3px solid ' + C.warn + '; outline-offset: 2px; box-shadow: 0 0 12px rgba(251,191,36,.5); transition: all 0.3s; }' +
+      '.' + INLINE_KW_CLS + ' { background: rgba(251,191,36,0.38); border: 1px solid #fbbf24; border-radius: 3px; padding: 0 3px; font-weight: 700; color: #000; box-decoration-break: clone; }' +
+      '.' + INLINE_EMAIL_CLS + ' { background: rgba(96,165,250,0.28); border: 1px solid #60a5fa; border-radius: 3px; padding: 0 3px; font-weight: 600; color: #1e3a5f; }' +
+      '.' + PROMOTED_CLS + ' { background: #ef4444; border: 1px solid #dc2626; border-radius: 3px; padding: 0 3px; font-weight: 700; color: #fff; box-decoration-break: clone; }' +
+      // Jobs page: left list should have no left borders/outlines (user request)
+      'body.jobs-page ' + '.' + VIEWED_CLS + ' { box-shadow: none !important; }' +
+      'body.jobs-page ' + '.' + HL_CLS + ' { outline: none !important; box-shadow: none !important; }' +
       'div[data-componentkey="SearchResults_SearchRightRail"] { display: none !important; }' +
       '.search-reusable-search-right-rail { display: none !important; }';
     document.head.appendChild(style);
@@ -456,10 +484,139 @@
   const FEED_MARKERS = ['feed post', 'feed', 'home'];
 
   function getPosts() {
-    return Array.from(document.querySelectorAll('h2'))
+    const feedPosts = Array.from(document.querySelectorAll('h2'))
       .filter(h => FEED_MARKERS.includes((h.textContent || '').trim().toLowerCase()))
       .map(h => h.parentElement)
       .filter(p => p && !p.classList.contains(HIDDEN_CLS));
+    if (feedPosts.length) return feedPosts;
+    // Jobs search fallback — job cards on /jobs/search (actual LinkedIn DOM: li[data-occludable-job-id] / div[data-job-id])
+    if (isJobsPage()) {
+      const jobCards = Array.from(document.querySelectorAll(
+        'li[data-occludable-job-id], div[data-job-id], .job-card-container, li.scaffold-layout__list-item, .jobs-search__results-list__list-item'
+      )).map(el => {
+        // Normalize to card wrapper
+        const card = el.closest('li[data-occludable-job-id]') || el.closest('div[data-job-id]') || el.closest('.jobs-search__results-list__list-item') || el;
+        return card;
+      }).filter((v,i,a) => v && a.indexOf(v)===i && !v.classList.contains(HIDDEN_CLS) && v.textContent.trim().length > 20);
+      if (jobCards.length) return jobCards;
+    }
+    return feedPosts;
+  }
+  function getJobDetailsElement() {
+    if (!isJobsPage()) return null;
+    // Try multiple selectors for LinkedIn's job details pane (right side)
+    return document.querySelector('.jobs-search__job-details--container') ||
+           document.querySelector('.scaffold-layout__detail') ||
+           document.querySelector('[data-job-details]') ||
+           document.querySelector('.jobs-details__main-content') ||
+           document.querySelector('#is-expanded') ||
+           document.querySelector('.jobs-search-two-pane__details') ||
+           document.querySelector('div[data-job-id] + div + div') ||
+           document.getElementById('job-details');
+  }
+  const PROMOTED_CLS = 'li-ac-promoted-inline';
+  function updateJobsBodyClass() {
+    try {
+      if (isJobsPage()) document.body.classList.add('jobs-page');
+      else document.body.classList.remove('jobs-page');
+    } catch (_) {}
+  }
+  function clearPromotedHighlights(posts) {
+    const marks = posts && posts.length
+      ? posts.reduce((acc, p) => acc.concat(Array.prototype.slice.call(p.querySelectorAll('.' + PROMOTED_CLS))), [])
+      : Array.prototype.slice.call(document.querySelectorAll('.' + PROMOTED_CLS));
+    const parents = new Set();
+    marks.forEach(mark => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+      parents.add(parent);
+    });
+    parents.forEach(p => { if (p.normalize) p.normalize(); });
+  }
+  function highlightPromoted(posts) {
+    if (!isJobsPage()) return 0;
+    let total = 0;
+    const re = /\bPromoted\b/gi;
+    posts.forEach(p => {
+      // Only highlight if the card actually contains Promoted
+      if (!/Promoted/i.test(p.textContent)) return;
+      const pEls = Array.from(p.querySelectorAll('span, div, p, li')).filter(el => /Promoted/i.test(el.textContent) && el.children.length === 0);
+      // Fallback: highlight directly in the card's text nodes
+      const targets = pEls.length ? pEls : [p];
+      targets.forEach(el => {
+        if (el.closest && el.closest('.' + PROMOTED_CLS)) return;
+        total += highlightInElement(el, new RegExp(re.source, 'gi'), PROMOTED_CLS);
+      });
+      // Ensure at least one highlight if not found via children
+      if (total === 0 || !p.querySelector('.' + PROMOTED_CLS)) {
+        total += highlightInElement(p, new RegExp(re.source, 'gi'), PROMOTED_CLS);
+      }
+    });
+    return total;
+  }
+  function highlightJobDetails(keywords) {
+    if (!isJobsPage() || !cfg.highlightInline || !keywords || !keywords.length) return 0;
+    const details = getJobDetailsElement();
+    if (!details) return 0;
+    // Clear previous highlights in details
+    Array.from(details.querySelectorAll('.' + INLINE_KW_CLS)).forEach(mark => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+      if (parent.normalize) parent.normalize();
+    });
+    let total = 0;
+    const items = normalizeHighlightItems(keywords);
+    items.forEach(item => {
+      const kw = item.kw;
+      const color = sanitizeHex(item.color || '#fbbf24', '#fbbf24');
+      const parts = kwParts(kw);
+      parts.forEach(part => {
+        const escaped = esc(part);
+        const pattern = /^[a-z0-9]+$/i.test(part) ? '(^|[^a-z0-9])(' + escaped + ')([^a-z0-9]|$)' : '(' + escaped + ')';
+        const re = new RegExp(pattern, 'gi');
+        const walker = document.createTreeWalker(details, NodeFilter.SHOW_TEXT, null);
+        const nodes = [];
+        let node;
+        while ((node = walker.nextNode())) {
+          if (node.parentElement && node.parentElement.closest && node.parentElement.closest('.' + INLINE_KW_CLS)) continue;
+          nodes.push(node);
+        }
+        nodes.forEach(textNode => {
+          const text = textNode.nodeValue;
+          let m;
+          re.lastIndex = 0;
+          if (!re.test(text)) return;
+          re.lastIndex = 0;
+          const frag = document.createDocumentFragment();
+          let lastIdx = 0;
+          while ((m = re.exec(text)) !== null) {
+            const full = m[0];
+            const kwText = m[2] !== undefined ? m[2] : m[1];
+            const kwStart = m.index + (m[2] !== undefined ? m[1].length : 0);
+            if (kwStart > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, kwStart)));
+            const mark = document.createElement('mark');
+            mark.className = INLINE_KW_CLS;
+            mark.textContent = kwText;
+            mark.style.background = color;
+            mark.style.borderColor = color;
+            mark.style.color = getContrastColor(color, 1, '#fff');
+            mark.style.padding = '0 3px';
+            mark.style.borderRadius = '3px';
+            frag.appendChild(mark);
+            lastIdx = kwStart + kwText.length;
+            total++;
+            if (full.length === 0) re.lastIndex++;
+          }
+          if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+          textNode.parentNode.replaceChild(frag, textNode);
+        });
+      });
+    });
+    return total;
   }
 
   // Split a keyword on '+' into AND parts only when every '+' is a separator
@@ -564,6 +721,7 @@
       if (found.length) {
         const key = postKey(p);
         ensureMeta('em', key);
+        highlightEmailsInline(p, [...new Set(found)]);
         hits.push({ el: p, emails: [...new Set(found)], key });
       }
     });
@@ -574,13 +732,211 @@
     Array.prototype.forEach.call(document.querySelectorAll('.' + HL_CLS), el => el.classList.remove(HL_CLS));
   }
 
+  // === Inline highlights (last-pane highlight feature) ===
+  function clearInlineHighlights(posts) {
+    const marks = posts && posts.length
+      ? posts.reduce((acc, p) => acc.concat(Array.prototype.slice.call(p.querySelectorAll('.' + INLINE_KW_CLS + ', .' + INLINE_EMAIL_CLS))), [])
+      : Array.prototype.slice.call(document.querySelectorAll('.' + INLINE_KW_CLS + ', .' + INLINE_EMAIL_CLS));
+    const parents = new Set();
+    marks.forEach(mark => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+      parents.add(parent);
+    });
+    parents.forEach(p => { if (p.normalize) p.normalize(); });
+  }
+
+  function highlightInElement(root, regex, cls) {
+    if (!root || !regex) return 0;
+    let count = 0;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) {
+      // Skip already highlighted ancestors
+      if (n.parentElement && n.parentElement.closest && n.parentElement.closest('.' + INLINE_KW_CLS + ', .' + INLINE_EMAIL_CLS + ', .' + PROMOTED_CLS)) continue;
+      nodes.push(n);
+    }
+    nodes.forEach(textNode => {
+      const text = textNode.nodeValue;
+      if (!text || !regex.test(text)) return;
+      regex.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      let m;
+      while ((m = regex.exec(text)) !== null) {
+        if (m.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
+        const mark = document.createElement('mark');
+        mark.className = cls;
+        mark.textContent = m[0];
+        if (cls === INLINE_EMAIL_CLS) {
+          const emailColor = '#60a5fa';
+          mark.style.background = emailColor;
+          mark.style.borderColor = emailColor;
+          mark.style.color = getContrastColor(emailColor, 1, '#fff');
+          mark.style.padding = '0 3px';
+          mark.style.borderRadius = '3px';
+          mark.style.border = '1px solid ' + emailColor;
+        } else if (cls === PROMOTED_CLS) {
+          const promColor = '#ef4444';
+          mark.style.background = promColor;
+          mark.style.borderColor = promColor;
+          mark.style.color = '#fff';
+          mark.style.padding = '0 3px';
+          mark.style.borderRadius = '3px';
+          mark.style.border = '1px solid ' + promColor;
+          mark.style.fontWeight = '700';
+        }
+        frag.appendChild(mark);
+        lastIdx = m.index + m[0].length;
+        count++;
+        if (m[0].length === 0) regex.lastIndex++;
+      }
+      if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+      if (frag.childNodes.length) textNode.parentNode.replaceChild(frag, textNode);
+    });
+    return count;
+  }
+
+  const HEX_RE = /^#[0-9a-f]{6}$/i;
+  function sanitizeHex(hex, fallback) {
+    fallback = fallback || '#fbbf24';
+    let s = String(hex || '').trim().toLowerCase();
+    if (/^#[0-9a-f]{3}$/.test(s)) { s = '#' + s[1]+s[1]+s[2]+s[2]+s[3]+s[3]; return s; }
+    if (HEX_RE.test(s)) return s;
+    return fallback;
+  }
+  function hexToRgba(hex, alpha) {
+    try {
+      const s = sanitizeHex(hex, null);
+      if (!s) return 'rgba(251,191,36,' + alpha + ')';
+      let h = s.slice(1);
+      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      if (isNaN(r) || isNaN(g) || isNaN(b)) return 'rgba(251,191,36,' + alpha + ')';
+      return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    } catch (_) { return 'rgba(251,191,36,' + alpha + ')'; }
+  }
+  function getContrastColor(hex, alpha, bgHex) {
+    try {
+      let h = String(hex || '').trim();
+      if (!h) return '#000';
+      if (h[0] === '#') h = h.slice(1);
+      if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+      let r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      if (isNaN(r) || isNaN(g) || isNaN(b)) return '#000';
+      // Blend over actual bg (feed white #fff for inline marks, panel black #000 for pills)
+      const a = typeof alpha === 'number' ? Math.max(0, Math.min(1, alpha)) : 1;
+      let bg = String(bgHex || '#fff').trim();
+      if (bg[0] === '#') bg = bg.slice(1);
+      if (bg.length === 3) bg = bg[0]+bg[0]+bg[1]+bg[1]+bg[2]+bg[2];
+      let br = parseInt(bg.slice(0,2),16), bgG = parseInt(bg.slice(2,4),16), bb = parseInt(bg.slice(4,6),16);
+      if (isNaN(br)) { br = 255; bgG = 255; bb = 255; }
+      if (a < 1) {
+        r = Math.round(a * r + (1 - a) * br);
+        g = Math.round(a * g + (1 - a) * bgG);
+        b = Math.round(a * b + (1 - a) * bb);
+      }
+      // YIQ luminance — threshold 150 (light bg → black text)
+      const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+      return yiq >= 150 ? '#000' : '#fff';
+    } catch (_) { return '#000'; }
+  }
+  function normalizeHighlightItems(list) {
+    return strArray(list).map(item => {
+      if (item && typeof item === 'object' && item.kw) {
+        const kw = String(item.kw).trim();
+        if (!kw) return null;
+        return { kw, color: sanitizeHex(item.color, '#fbbf24') };
+      }
+      const kw = String(item).trim();
+      if (!kw) return null;
+      return { kw, color: '#fbbf24' };
+    }).filter(Boolean);
+  }
+  function highlightKeywordsInline(post, keywords) {
+    if (!cfg.highlightInline || !keywords || !keywords.length) return 0;
+    let total = 0;
+    const pEls = Array.prototype.slice.call(post.children).filter(c => c.tagName === 'P');
+    const targets = pEls.length ? pEls : [post];
+    const items = normalizeHighlightItems(keywords);
+    items.forEach(item => {
+      const kw = item.kw;
+      const color = sanitizeHex(item.color || '#fbbf24', '#fbbf24');
+      const parts = kwParts(kw);
+      parts.forEach(part => {
+        const escaped = esc(part);
+        const pattern = /^[a-z0-9]+$/i.test(part) ? '(^|[^a-z0-9])(' + escaped + ')([^a-z0-9]|$)' : '(' + escaped + ')';
+        const re = new RegExp(pattern, 'gi');
+        targets.forEach(el => {
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+          const nodes = [];
+          let node;
+          while ((node = walker.nextNode())) {
+            if (node.parentElement && node.parentElement.closest && node.parentElement.closest('.' + INLINE_KW_CLS + ', .' + INLINE_EMAIL_CLS)) continue;
+            nodes.push(node);
+          }
+          nodes.forEach(textNode => {
+            const text = textNode.nodeValue;
+            let m;
+            re.lastIndex = 0;
+            if (!re.test(text)) return;
+            re.lastIndex = 0;
+            const frag = document.createDocumentFragment();
+            let lastIdx = 0;
+            while ((m = re.exec(text)) !== null) {
+              const full = m[0];
+              const kwText = m[2] !== undefined ? m[2] : m[1];
+              const kwStart = m.index + (m[2] !== undefined ? m[1].length : 0);
+              if (kwStart > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, kwStart)));
+              const mark = document.createElement('mark');
+              mark.className = INLINE_KW_CLS;
+              mark.textContent = kwText;
+              mark.style.background = color;
+              mark.style.borderColor = color;
+              mark.style.color = getContrastColor(color, 1, '#fff');
+              mark.style.padding = '0 3px';
+              mark.style.borderRadius = '3px';
+              frag.appendChild(mark);
+              lastIdx = kwStart + kwText.length;
+              total++;
+              if (full.length === 0) re.lastIndex++;
+            }
+            if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+            textNode.parentNode.replaceChild(frag, textNode);
+          });
+        });
+      });
+    });
+    return total;
+  }
+
+  function highlightEmailsInline(post, emails) {
+    if (!cfg.highlightInline || !emails || !emails.length) return 0;
+    let total = 0;
+    const pEls = Array.prototype.slice.call(post.children).filter(c => c.tagName === 'P');
+    const targets = pEls.length ? pEls : [post];
+    emails.forEach(em => {
+      const re = new RegExp(esc(em), 'gi');
+      targets.forEach(el => { total += highlightInElement(el, re, INLINE_EMAIL_CLS); });
+    });
+    return total;
+  }
+
   // Green left-edge marker on feed posts that were removed from the found
   // lists via "Clear seen". Re-applied every scan (LinkedIn re-renders posts),
   // so cleared posts stay visibly marked until RESET.
   function applyViewedBorders(posts) {
+    // Jobs page: no left borders per user request
+    if (isJobsPage()) {
+      posts.forEach(p => p.classList.remove(VIEWED_CLS));
+      return;
+    }
     posts.forEach(p => {
       const key = postKey(p);
-      if (dismissedKeys.has('kw:' + key) || dismissedKeys.has('em:' + key)) {
+      const viewed = hitMeta.get('kw:' + key)?.viewed || hitMeta.get('em:' + key)?.viewed || isDismissedForEl('kw', key, p) || isDismissedForEl('em', key, p);
+      if (viewed) {
         p.classList.add(VIEWED_CLS);
       } else {
         p.classList.remove(VIEWED_CLS);
@@ -598,12 +954,66 @@
       if (matched.length) {
         const key = postKey(p);
         ensureMeta('kw', key);
-        p.classList.add(HL_CLS);
+        if (!isJobsPage()) p.classList.add(HL_CLS);
         hits.push({ el: p, keywords: matched, key });
         dbg('keyword hit (' + matched.join(', ') + '):', t.slice(0, 60));
       }
     });
     return hits;
+  }
+
+  // === Auto-mark read on viewport (instant green border) — disabled on Jobs left (no borders per user)
+  let viewportObserver = null;
+  const seenTimers = new Map();
+  function startViewportObserver() {
+    stopViewportObserver();
+    if (!cfg.autoMarkSeen) return;
+    if (isJobsPage()) return; // Jobs left: no green borders
+    if (typeof IntersectionObserver === 'undefined') return;
+    viewportObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        const el = entry.target;
+        const key = postKey(el);
+        if (!key) return;
+        if (isDismissedForEl('kw', key, el) || isDismissedForEl('em', key, el)) return;
+        // Instant green on any feed post that becomes 30% visible — no debounce, keep in list
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.3) {
+          if (el.classList.contains(VIEWED_CLS)) return;
+          if (!el.isConnected) return;
+          const metaKw = hitMeta.get('kw:' + key);
+          const metaEm = hitMeta.get('em:' + key);
+          if (metaKw) metaKw.viewed = true;
+          if (metaEm) metaEm.viewed = true;
+          if (!metaKw && !metaEm) ensureMeta('kw', key).viewed = true;
+          el.classList.add(VIEWED_CLS);
+          dbg('auto-marked viewed (viewport 30% instant):', key.slice(0,40));
+          renderPanel(panelData, kwPanelData);
+        }
+      });
+    }, { threshold: [0.3, 0.6] });
+    // Observe ALL feed posts for instant green, not just hits
+    const posts = getPosts();
+    posts.forEach(p => {
+      if (p && p.isConnected) {
+        try { viewportObserver.observe(p); } catch (_) {}
+      }
+    });
+    // Also observe current hits (covers hidden/filtered cases)
+    const allHits = (kwPanelData || []).concat(panelData || []);
+    allHits.forEach(h => {
+      if (h.el && h.el.isConnected) {
+        try { viewportObserver.observe(h.el); } catch (_) {}
+      }
+    });
+  }
+  function stopViewportObserver() {
+    if (viewportObserver) { viewportObserver.disconnect(); viewportObserver = null; }
+    seenTimers.forEach(t => clearTimeout(t));
+    seenTimers.clear();
+  }
+  function refreshViewportObserver() {
+    if (!cfg.autoMarkSeen) { stopViewportObserver(); return; }
+    startViewportObserver();
   }
 
   // === Right-click → add post keywords to include/exclude ===
@@ -660,12 +1070,31 @@
     '</span>';
   }
 
+  let tagsExpanded = { include: false, exclude: false, highlight: false };
+  let pendingHlRender = false;
   function renderTags(panelEl) {
     if (!panelEl) return;
     const inc = panelEl.querySelector('#li-ac-tags-include');
     const exc = panelEl.querySelector('#li-ac-tags-exclude');
-    if (inc) inc.innerHTML = strArray(cfg.includeKeywords).map(tagHtml).join('');
-    if (exc) exc.innerHTML = strArray(cfg.excludeKeywords).map(tagHtml).join('');
+    const renderWithMore = (container, list, kind) => {
+      if (!container) return;
+      const arr = strArray(list);
+      if (arr.length > 5 && !tagsExpanded[kind]) {
+        const first = arr.slice(0, 5).map(tagHtml).join('');
+        const more = arr.length - 5;
+        container.innerHTML = first + '<button type="button" data-expand="' + kind + '" title="Show ' + more + ' more" style="display:inline-flex;align-items:center;background:' + BW.bg + ';color:' + BW.muted + ';border:1px dashed ' + BW.border + ';border-radius:4px;padding:4px 9px;font-size:13px;cursor:pointer;">+' + more + ' more</button>';
+        const btn = container.querySelector('[data-expand="' + kind + '"]');
+        if (btn) btn.addEventListener('click', () => { tagsExpanded[kind] = true; renderTags(panelEl); renderHighlightTags(panelEl); });
+      } else {
+        const html = arr.map(tagHtml).join('');
+        const collapse = arr.length > 5 ? '<button type="button" data-collapse="' + kind + '" title="Show less" style="display:inline-flex;align-items:center;background:' + BW.bg + ';color:' + BW.muted + ';border:1px dashed ' + BW.border + ';border-radius:4px;padding:4px 9px;font-size:13px;cursor:pointer;">− less</button>' : '';
+        container.innerHTML = html + collapse;
+        const btn = container.querySelector('[data-collapse="' + kind + '"]');
+        if (btn) btn.addEventListener('click', () => { tagsExpanded[kind] = false; renderTags(panelEl); renderHighlightTags(panelEl); });
+      }
+    };
+    renderWithMore(inc, cfg.includeKeywords, 'include');
+    renderWithMore(exc, cfg.excludeKeywords, 'exclude');
   }
 
   function removeKeyword(kw, kind) {
@@ -675,6 +1104,114 @@
     chrome.storage.sync.set({ [key]: next });
     dbg('removed keyword "' + kw + '" from ' + key + '; re-scanning');
     if (kind === 'exclude') restoreHidden(); // posts no longer matching come back
+    scanFeed();
+  }
+
+  function highlightTagHtml(item) {
+    const kw = item && typeof item === 'object' ? item.kw : item;
+    const rawColor = item && typeof item === 'object' ? (item.color || '#fbbf24') : '#fbbf24';
+    const color = sanitizeHex(rawColor, '#fbbf24');
+    const bg = hexToRgba(color, 0.18);
+    const txt = getContrastColor(color, 0.18, '#000');
+    return '<span style="display:inline-flex;align-items:center;gap:4px;background:' + bg + ';color:' + txt + ';border:1px solid ' + color + ';border-radius:4px;padding:2px 6px 2px 4px;font-size:13px;max-width:100%;overflow:hidden;">' +
+      '<input type="color" data-hl-color="' + escHtml(kw) + '" value="' + escHtml(color) + '" title="Change color for ' + escHtml(kw) + '" style="width:18px;height:18px;min-width:18px;border:1px solid ' + color + ';border-radius:50%;padding:0;cursor:pointer;background:none;flex:none;box-sizing:border-box;">' +
+      '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(kw) + '</span>' +
+      '<button type="button" data-hl-remove="' + escHtml(kw) + '" title="Remove ' + escHtml(kw) + '" style="background:none;border:none;color:' + txt + ';cursor:pointer;font-size:15px;line-height:1;padding:0 2px;flex:none;">×</button>' +
+    '</span>';
+  }
+  function renderHighlightTags(panelEl) {
+    if (!panelEl) return;
+    const container = panelEl.querySelector('#li-ac-tags-highlight');
+    if (!container) return;
+    // Defer only if native color picker is open (focused) — otherwise input loses picker
+    const active = document.activeElement;
+    if (active && active.hasAttribute && active.hasAttribute('data-hl-color')) {
+      const hlSection = panelEl.querySelector('#li-ac-highlight-section');
+      if (hlSection && hlSection.contains(active)) {
+        pendingHlRender = true;
+        return;
+      }
+    }
+    // Preserve highlight text input focus/selection across re-render (tags container is sibling, but keep caret)
+    const hlInput = panelEl.querySelector('#li-ac-hl-input');
+    const hadHlFocus = hlInput && document.activeElement === hlInput;
+    const selStart = hadHlFocus ? hlInput.selectionStart : null;
+    const selEnd = hadHlFocus ? hlInput.selectionEnd : null;
+    const hlInputVal = hadHlFocus ? hlInput.value : null;
+    pendingHlRender = false;
+    const arr = normalizeHighlightItems(cfg.highlightKeywords);
+    if (arr.length > 5 && !tagsExpanded.highlight) {
+      const first = arr.slice(0, 5).map(highlightTagHtml).join('');
+      const more = arr.length - 5;
+      container.innerHTML = first + '<button type="button" data-expand="highlight" title="Show ' + more + ' more" style="display:inline-flex;align-items:center;background:' + BW.bg + ';color:' + BW.muted + ';border:1px dashed ' + BW.border + ';border-radius:4px;padding:4px 9px;font-size:13px;cursor:pointer;">+' + more + ' more</button>';
+      const btn = container.querySelector('[data-expand="highlight"]');
+      if (btn) btn.addEventListener('click', () => { tagsExpanded.highlight = true; renderHighlightTags(panelEl); });
+    } else {
+      const html = arr.map(highlightTagHtml).join('');
+      const collapse = arr.length > 5 ? '<button type="button" data-collapse="highlight" title="Show less" style="display:inline-flex;align-items:center;background:' + BW.bg + ';color:' + BW.muted + ';border:1px dashed ' + BW.border + ';border-radius:4px;padding:4px 9px;font-size:13px;cursor:pointer;">− less</button>' : '';
+      container.innerHTML = html + collapse;
+      const btn = container.querySelector('[data-collapse="highlight"]');
+      if (btn) btn.addEventListener('click', () => { tagsExpanded.highlight = false; renderHighlightTags(panelEl); });
+    }
+    // Wire native hex pickers — input = live preview only (no storage/scan, keeps picker open), change = persist
+    container.querySelectorAll('input[data-hl-color]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const raw = inp.value;
+        const newColor = sanitizeHex(raw, '#fbbf24');
+        const pill = inp.closest('span');
+        if (pill) { pill.style.borderColor = newColor; pill.style.background = hexToRgba(newColor, 0.18); const txt = getContrastColor(newColor, 0.18, '#000'); pill.style.color = txt; const btn = pill.querySelector('[data-hl-remove]'); if (btn) btn.style.color = txt; inp.style.borderColor = newColor; }
+        // Live preview of inline marks (no storage) — update marks for this kw only
+        const kw = inp.getAttribute('data-hl-color');
+        document.querySelectorAll('.' + INLINE_KW_CLS).forEach(mark => {
+          if (mark.textContent.toLowerCase() === kw.toLowerCase()) {
+            mark.style.background = newColor;
+            mark.style.borderColor = newColor;
+            mark.style.color = getContrastColor(newColor, 1, '#fff');
+          }
+        });
+      });
+      inp.addEventListener('change', () => {
+        const kw = inp.getAttribute('data-hl-color');
+        const raw = inp.value;
+        const newColor = sanitizeHex(raw, '#fbbf24');
+        const next = normalizeHighlightItems(cfg.highlightKeywords).map(it => it.kw === kw ? { kw: it.kw, color: newColor } : it);
+        cfg.highlightKeywords = next;
+        chrome.storage.sync.set({ highlightKeywords: next });
+        const pill2 = inp.closest('span');
+        if (pill2) { pill2.style.borderColor = newColor; pill2.style.background = hexToRgba(newColor, 0.18); const txt2 = getContrastColor(newColor, 0.18, '#000'); pill2.style.color = txt2; const btn2 = pill2.querySelector('[data-hl-remove]'); if (btn2) btn2.style.color = txt2; }
+        scanFeed();
+      });
+    });
+    // Flush pending re-render on focusout — if user was typing while a feed scan deferred
+    const hlSectionEl = panelEl.querySelector('#li-ac-highlight-section');
+    if (hlSectionEl && !hlSectionEl.__hlFocusWired) {
+      hlSectionEl.__hlFocusWired = true;
+      hlSectionEl.addEventListener('focusout', () => {
+        setTimeout(() => {
+          const stillInside = hlSectionEl.contains(document.activeElement);
+          if (!stillInside && pendingHlRender) {
+            pendingHlRender = false;
+            renderHighlightTags(panelEl);
+            scanFeed();
+          }
+        }, 100);
+      });
+    }
+    // Restore highlight input focus if we re-rendered while user was typing
+    if (hadHlFocus) {
+      const newHlInput = panelEl.querySelector('#li-ac-hl-input');
+      if (newHlInput) {
+        newHlInput.focus();
+        if (hlInputVal !== null) newHlInput.value = hlInputVal;
+        try { if (selStart !== null) newHlInput.setSelectionRange(selStart, selEnd); } catch(_){}
+      }
+    }
+  }
+  function removeHighlightKeyword(kw) {
+    const next = normalizeHighlightItems(cfg.highlightKeywords).filter(it => it.kw !== kw);
+    cfg.highlightKeywords = next;
+    chrome.storage.sync.set({ highlightKeywords: next });
+    dbg('removed highlight "' + kw + '"; re-scanning');
     scanFeed();
   }
 
@@ -696,7 +1233,46 @@
   const hitMeta = new Map();
 
   function postKey(el) {
+    if (el) {
+      try {
+        // Prefer direct URN on the post node itself
+        const selfUrn = el.getAttribute && el.getAttribute('data-urn');
+        if (selfUrn && selfUrn.startsWith('urn:li:')) return selfUrn;
+        // Walk up to 3 parents for data-urn (avoids climbing to feed root)
+        let cur = el.parentElement;
+        for (let i = 0; i < 3 && cur; i++) {
+          const u = cur.getAttribute && cur.getAttribute('data-urn');
+          if (u && u.startsWith('urn:li:')) return u;
+          cur = cur.parentElement;
+        }
+        // Fallback: closest [data-urn] but validate it looks like a post wrapper (contains h2 feed marker or listitem)
+        const urnEl = el.closest ? el.closest('[data-urn]') : null;
+        if (urnEl) {
+          const urn = urnEl.getAttribute && urnEl.getAttribute('data-urn');
+          if (urn && urn.startsWith('urn:li:')) {
+            // Ensure wrapper is plausible post container (has feed marker or is listitem), not feed root
+            const hasMarker = urnEl.querySelector && urnEl.querySelector('h2');
+            const isListItem = urnEl.matches && urnEl.matches('[role="listitem"]');
+            if (hasMarker || isListItem || urnEl === el) return urn;
+            // If urnEl is too high (contains many posts), fallback to slice
+            if (urnEl.querySelectorAll && urnEl.querySelectorAll('h2').length <= 1) return urn;
+          }
+        }
+      } catch (_) {}
+    }
     return ((el && el.textContent) || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  }
+  function legacyPostKey(el) {
+    return ((el && el.textContent) || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  }
+  function isDismissedForEl(kind, key, el) {
+    if (dismissedKeys.has(kind + ':' + key)) return true;
+    // Check legacy slice for migration (v1.4.5 keys)
+    try {
+      const legacy = legacyPostKey(el);
+      if (legacy && legacy !== key && dismissedKeys.has(kind + ':' + legacy)) return true;
+    } catch (_) {}
+    return false;
   }
 
   // The post's own body text: only the direct <p> children of the post card.
@@ -706,6 +1282,7 @@
   // cards) → '' so they never match.
   function postBodyText(el) {
     if (!el) return '';
+    if (isJobsPage()) return (el.textContent || '').replace(/\s+/g, ' ').trim();
     return Array.from(el.children)
       .filter(c => c.tagName === 'P')
       .map(c => c.textContent || '')
@@ -749,8 +1326,52 @@
   // green border in the feed) so users see why it's no longer listed. Tracks
   // `kind:key` entries that survive re-scans; RESET restores them.
   const dismissedKeys = new Set();
+  // === Global persistence for viewed posts (last-pane viewed memory) ===
+  const VIEWED_STORAGE_KEY = 'viewedPosts';
+  const VIEWED_CAP = 1000;
+  const VIEWED_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+  function loadViewedFromStorage() {
+    try {
+      const store = chrome.storage && chrome.storage.local ? chrome.storage.local : null;
+      if (!store || !store.get) return;
+      store.get({ [VIEWED_STORAGE_KEY]: {} }, res => {
+        const map = res && res[VIEWED_STORAGE_KEY] ? res[VIEWED_STORAGE_KEY] : {};
+        const now = Date.now();
+        let added = 0;
+        Object.keys(map).forEach(k => {
+          const ts = map[k];
+          if (typeof ts === 'number' && now - ts < VIEWED_TTL_MS) {
+            if (!dismissedKeys.has(k)) { dismissedKeys.add(k); added++; }
+          }
+        });
+        if (added) {
+          dbg('loaded', added, 'viewed posts from storage');
+          // Re-render to hide dismissed posts and show green borders after async load
+          try { renderPanel(panelData, kwPanelData); applyViewedBorders(getPosts()); } catch (_) {}
+        }
+      });
+    } catch (_) {}
+  }
+  function persistViewedKeys(keys) {
+    try {
+      const store = chrome.storage && chrome.storage.local ? chrome.storage.local : null;
+      if (!store || !store.get || !store.set) return;
+      store.get({ [VIEWED_STORAGE_KEY]: {} }, res => {
+        const map = res && res[VIEWED_STORAGE_KEY] ? res[VIEWED_STORAGE_KEY] : {};
+        const now = Date.now();
+        keys.forEach(k => { map[k] = now; });
+        // TTL prune + cap
+        const entries = Object.entries(map).filter(([_, ts]) => now - ts < VIEWED_TTL_MS);
+        entries.sort((a,b) => b[1] - a[1]); // newest first
+        const pruned = Object.fromEntries(entries.slice(0, VIEWED_CAP));
+        store.set({ [VIEWED_STORAGE_KEY]: pruned });
+      });
+    } catch (_) {}
+  }
   function clearSeen() {
-    hitMeta.forEach((meta, k) => { if (meta.viewed) dismissedKeys.add(k); });
+    const newly = [];
+    hitMeta.forEach((meta, k) => { if (meta.viewed && !dismissedKeys.has(k)) { dismissedKeys.add(k); newly.push(k); } });
+    if (newly.length) persistViewedKeys(newly);
     renderPanel(panelData, kwPanelData);
     applyViewedBorders(getPosts());
     return dismissedKeys.size;
@@ -760,7 +1381,7 @@
   const sortNewest = { kw: true, em: true };
   function sortedHits(kind) {
     const arr = kind === 'kw' ? kwPanelData : panelData;
-    const visible = arr.filter(h => !dismissedKeys.has(kind + ':' + h.key));
+    const visible = arr.filter(h => !isDismissedForEl(kind, h.key, h.el));
     if (!sortNewest[kind]) return visible;
     return visible.slice().sort((a, b) => {
       const ma = hitMeta.get(kind + ':' + a.key) || { firstSeen: 0 };
@@ -851,6 +1472,13 @@
         const kind = removeBtn.closest('#li-ac-tags-exclude') ? 'exclude' : 'include';
         removeKeyword(kw, kind);
         if (panel) renderTags(panel);
+        return;
+      }
+      const hlRemoveBtn = e.target.closest('[data-hl-remove]');
+      if (hlRemoveBtn) {
+        const kw = hlRemoveBtn.getAttribute('data-hl-remove');
+        removeHighlightKeyword(kw);
+        if (panel) renderHighlightTags(panel);
         return;
       }
       const li = e.target.closest('[data-idx]');
@@ -1141,15 +1769,34 @@
           '<span>⌨ Keywords</span>' +
           '<button id="li-ac-kw-collapse" title="Collapse/expand keyword inputs" style="flex:none;width:26px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">▼</button>' +
         '</div>' +
-        '<div id="li-ac-kw-section" style="padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
-          '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Include keywords</div>' +
-          '<input id="li-ac-kw-include" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react+senior, python · press Enter to add">' +
-          '<div id="li-ac-tags-include" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>' +
-          '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Exclude keywords</div>' +
-          '<input id="li-ac-kw-exclude" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder=".net, java, php · press Enter to add">' +
-          '<div id="li-ac-tags-exclude" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;"></div>' +
-        '</div>' +
-        '</div>';
+          '<div id="li-ac-kw-section" style="padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
+            '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Include keywords</div>' +
+            '<input id="li-ac-kw-include" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react+senior, python · press Enter to add">' +
+            '<div id="li-ac-tags-include" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>' +
+            '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Exclude keywords</div>' +
+            '<input id="li-ac-kw-exclude" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder=".net, java, php · press Enter to add">' +
+            '<div id="li-ac-tags-exclude" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;"></div>' +
+          '</div>' +
+          '<div id="li-ac-highlight-section" style="padding:10px 12px;border-bottom:1px solid ' + BW.border + ';background:rgba(251,191,36,0.04);' + (isJobsPage() ? '' : 'display:none;') + '">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.warn + ';margin-bottom:8px;">' +
+              '<span>✨ Highlights — last pane</span>' +
+              '<span style="font-size:10px;color:' + BW.muted + ';font-weight:400;">quick eye grab</span>' +
+              '<span style="font-size:10px;color:' + (isJobsPage() ? C.ok : BW.muted) + ';border:1px solid ' + (isJobsPage() ? C.ok : BW.border) + ';border-radius:4px;padding:1px 5px;">' + (isJobsPage() ? '● Jobs' : '○ Feed') + '</span>' +
+            '</div>' +
+            '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Highlight words (independent) ' + (isJobsPage() ? '' : '<span style="font-size:11px;color:' + C.warn + ';">— only on Jobs</span>') + '</div>' +
+            '<input id="li-ac-hl-input" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react, python, tanstack · Enter" ' + (isJobsPage() ? '' : 'disabled') + '>' +
+            '<div id="li-ac-tags-highlight" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>' +
+            '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;opacity:' + (isJobsPage() ? '1' : '0.6') + ';">' +
+              '<input type="checkbox" id="li-ac-hl-inline" style="accent-color:' + C.warn + ';width:15px;height:15px;"' + (cfg.highlightInline ? ' checked' : '') + ' ' + (isJobsPage() ? '' : 'disabled') + '>' +
+              '<span>Enable highlight inline</span>' +
+            '</label>' +
+            '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;" title="Auto-mark read after 60% visible for 2s — green border, persists globally">' +
+              '<input type="checkbox" id="li-ac-auto-seen" style="accent-color:' + C.ok + ';width:15px;height:15px;"' + (cfg.autoMarkSeen ? ' checked' : '') + '>' +
+              '<span>👁 Auto-mark seen <span style="font-size:11px;color:' + BW.muted + ';">(40% / 0.3s → green (keeps in list))</span></span>' +
+            '</label>' +
+            '<div style="font-size:11px;color:' + BW.muted + ';margin-top:6px;line-height:1.4;">Highlight words glow per-tag color (● picker) directly in post. Viewed = <span style="box-shadow:inset 3px 0 0 ' + C.ok + ';padding-left:4px;">green</span> border (keeps in list; Clear seen removes).</div>' +
+          '</div>' +
+          '</div>';
       document.body.appendChild(panel);
       const toggle = panel.querySelector('#li-ac-autoscroll');
       toggle.addEventListener('change', () => {
@@ -1190,10 +1837,43 @@
       }
       kwIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitKwInputs(); } });
       kwEx.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitKwInputs(); } });
+      const hlInput = panel.querySelector('#li-ac-hl-input');
+      if (hlInput) hlInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const vals = hlInput.value.split(/[\n,]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+          if (vals.length) {
+            const existing = normalizeHighlightItems(cfg.highlightKeywords);
+            const existingSet = new Set(existing.map(it=>it.kw));
+            const newItems = vals.filter(v=>!existingSet.has(v)).map(v=>({kw:v,color:'#fbbf24'}));
+            cfg.highlightKeywords = newItems.concat(existing);
+            hlInput.value = '';
+            chrome.storage.sync.set({ highlightKeywords: cfg.highlightKeywords });
+            renderHighlightTags(panel);
+            scanFeed();
+          }
+        }
+      });
       panel.querySelector('#li-ac-kw-collapse').addEventListener('click', () => toggleKwSection());
       panel.querySelector('#li-ac-panel-min').addEventListener('click', () => togglePanelMinimize());
+      // Highlight toggles (last pane feature)
+      const hlInline = panel.querySelector('#li-ac-hl-inline');
+      if (hlInline) hlInline.addEventListener('change', () => {
+        cfg.highlightInline = hlInline.checked;
+        chrome.storage.sync.set({ highlightInline: cfg.highlightInline });
+        dbg('highlightInline set to', cfg.highlightInline);
+        scanFeed();
+      });
+      const autoSeen = panel.querySelector('#li-ac-auto-seen');
+      if (autoSeen) autoSeen.addEventListener('change', () => {
+        cfg.autoMarkSeen = autoSeen.checked;
+        chrome.storage.sync.set({ autoMarkSeen: cfg.autoMarkSeen });
+        dbg('autoMarkSeen set to', cfg.autoMarkSeen);
+        if (cfg.autoMarkSeen) refreshViewportObserver(); else stopViewportObserver();
+      });
       applyKwSection(panel);
       applyPanelMinimized(panel);
+      renderHighlightTags(panel);
     }
 
     // === Found panel (immediately left of the control panel) ===
@@ -1286,7 +1966,47 @@
       if (toggle) toggle.checked = !!cfg.autoScroll;
       const ultraToggle = panel.querySelector('#li-ac-ultra-hide');
       if (ultraToggle) ultraToggle.checked = !!cfg.ultraHide;
+      const hlInline = panel.querySelector('#li-ac-hl-inline');
+      if (hlInline) hlInline.checked = !!cfg.highlightInline;
+      const autoSeen = panel.querySelector('#li-ac-auto-seen');
+      if (autoSeen) autoSeen.checked = !!cfg.autoMarkSeen;
+      // Self-heal: if highlight section missing (old panel), inject it
+      if (!panel.querySelector('#li-ac-highlight-section')) {
+        const body = panel.querySelector('#li-ac-panel-body');
+        if (body) {
+          const sec = document.createElement('div');
+          sec.id = 'li-ac-highlight-section';
+          sec.style.cssText = 'padding:10px 12px;border-bottom:1px solid ' + BW.border + ';background:rgba(251,191,36,0.04);';
+          sec.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.warn + ';margin-bottom:8px;"><span>✨ Highlights — last pane</span><span style="font-size:10px;color:' + BW.muted + ';font-weight:400;">quick eye grab</span></div>' +
+            '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Highlight words (independent)</div><input id="li-ac-hl-input" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react, python, tanstack · Enter"><div id="li-ac-tags-highlight" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>' +
+            '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" id="li-ac-hl-inline" style="accent-color:' + C.warn + ';width:15px;height:15px;"' + (cfg.highlightInline ? ' checked' : '') + '><span>Enable highlight inline</span></label>' +
+            '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" id="li-ac-auto-seen" style="accent-color:' + C.ok + ';width:15px;height:15px;"' + (cfg.autoMarkSeen ? ' checked' : '') + '><span>👁 Auto-mark seen <span style="font-size:11px;color:' + BW.muted + ';">(40% / 0.3s → green (keeps in list))</span></span></label>' +
+            '<div style="font-size:11px;color:' + BW.muted + ';margin-top:6px;line-height:1.4;">Highlight words glow per-tag color directly in post. Pick color via ● next to each tag. Viewed = <span style="box-shadow:inset 3px 0 0 ' + C.ok + ';padding-left:4px;">green</span> border (keeps in list; Clear seen removes).</div>';
+          body.appendChild(sec);
+          const hlInputSec = sec.querySelector('#li-ac-hl-input');
+          if (hlInputSec) hlInputSec.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const vals = hlInputSec.value.split(/[\n,]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+              if (vals.length) {
+                const existing = normalizeHighlightItems(cfg.highlightKeywords);
+                const existingSet = new Set(existing.map(it=>it.kw));
+                const newItems = vals.filter(v=>!existingSet.has(v)).map(v=>({kw:v,color:'#fbbf24'}));
+                cfg.highlightKeywords = newItems.concat(existing);
+                hlInputSec.value = '';
+                chrome.storage.sync.set({ highlightKeywords: cfg.highlightKeywords });
+                renderHighlightTags(sec);
+                scanFeed();
+              }
+            }
+          });
+          sec.querySelector('#li-ac-hl-inline').addEventListener('change', () => { cfg.highlightInline = sec.querySelector('#li-ac-hl-inline').checked; chrome.storage.sync.set({ highlightInline: cfg.highlightInline }); scanFeed(); });
+          sec.querySelector('#li-ac-auto-seen').addEventListener('change', () => { cfg.autoMarkSeen = sec.querySelector('#li-ac-auto-seen').checked; chrome.storage.sync.set({ autoMarkSeen: cfg.autoMarkSeen }); if (cfg.autoMarkSeen) refreshViewportObserver(); else stopViewportObserver(); });
+          renderHighlightTags(sec);
+        }
+      }
       renderTags(panel);
+      renderHighlightTags(panel);
       applyKwSection(panel);
       applyPanelMinimized(panel);
     }
@@ -1404,16 +2124,58 @@
   function scanFeed() {
     clearTimeout(scanTimer);
     scanTimer = setTimeout(() => {
+      updateJobsBodyClass();
       if (!isAllowedUrl()) { renderGatedPanels(); return; } // URL gate
       let posts = getPosts();
       if (!posts.length) { dbg('scanFeed: no posts'); return; }
-      clearKeywordHighlights();
-      expandPosts(posts);
-      posts = getPosts(); // re-grab after expansion
-      filterPosts(posts);
-      posts = getPosts(); // re-grab after filtering (hidden posts excluded)
-      const kwHits = scanKeywords(posts);
-      const emHits = cfg.scanEmails ? scanEmails(posts) : [];
+      let kwHits = [], emHits = [];
+      suppressObserver = true;
+      try {
+        clearKeywordHighlights();
+        clearInlineHighlights(posts);
+        clearPromotedHighlights(posts);
+        // Clear JD highlights as well
+        const jdForClear = getJobDetailsElement();
+        if (jdForClear) clearInlineHighlights([jdForClear]);
+        expandPosts(posts);
+        posts = getPosts(); // re-grab after expansion
+        filterPosts(posts);
+        posts = getPosts(); // re-grab after filtering (hidden posts excluded)
+        kwHits = scanKeywords(posts);
+        emHits = cfg.scanEmails ? scanEmails(posts) : [];
+        // Independent highlight words — only on Jobs page (per user request)
+        if (isJobsPage()) {
+          const hlItems = normalizeHighlightItems(cfg.highlightKeywords);
+          if (cfg.highlightInline && hlItems.length) {
+            posts.forEach(p => {
+              const t = postBodyText(p).toLowerCase();
+              const matched = hlItems.filter(it => wordMatch(t, it.kw));
+              if (matched.length) highlightKeywordsInline(p, matched);
+            });
+            // Also highlight in JD (right side) — same keywords
+            const jd = getJobDetailsElement();
+            if (jd) {
+              const t = (jd.textContent || '').toLowerCase();
+              const matchedJD = hlItems.filter(it => wordMatch(t, it.kw));
+              if (matchedJD.length) highlightJobDetails(hlItems);
+            }
+          }
+          // Always highlight Promoted to avoid them — red
+          highlightPromoted(posts);
+          const jdPromoted = getJobDetailsElement();
+          if (jdPromoted && /Promoted/i.test(jdPromoted.textContent)) {
+            highlightInElement(jdPromoted, /\bPromoted\b/gi, PROMOTED_CLS);
+            // Ensure solid red for JD promoted as well
+            jdPromoted.querySelectorAll('.' + PROMOTED_CLS).forEach(m => {
+              m.style.background = '#ef4444';
+              m.style.borderColor = '#dc2626';
+              m.style.color = '#fff';
+            });
+          }
+        }
+      } finally {
+        suppressObserver = false;
+      }
       // A post that matches keywords AND yields an email is shown only under
       // Emails found — never duplicated under Keywords found.
       const emKeys = new Set(emHits.map(h => h.key));
@@ -1423,6 +2185,7 @@
       applyUltraHide(kwFiltered, emHits);
       // Green marker on posts removed via "Clear seen" (survives re-renders).
       applyViewedBorders(posts);
+      if (cfg.autoMarkSeen) refreshViewportObserver();
     }, 400);
   }
 
@@ -1567,11 +2330,13 @@
   }
 
   // MutationObserver for feed changes
-  let feedObserver = null;
+   let feedObserver = null;
+  let suppressObserver = false;
   function startFeedObserver() {
     if (feedObserver) feedObserver.disconnect();
     feedObserver = new MutationObserver(mutations => {
-      // Ignore mutations caused by our own UI (panel/style/badge) to avoid churn.
+      if (suppressObserver) return;
+      // Ignore mutations caused by our own UI (panel/style/badge/inline highlights) to avoid churn.
       const own = mutations.every(m => {
         // Removals/additions of our own top-level nodes (panel close, style,
         // badge) target document.body — catch them by node id too (M1).
@@ -1579,14 +2344,24 @@
         if (m.addedNodes && m.addedNodes.length) nodes.push.apply(nodes, m.addedNodes);
         if (m.removedNodes && m.removedNodes.length) nodes.push.apply(nodes, m.removedNodes);
         for (const n of nodes) {
-          if (n && n.nodeType === 1 && n.id && /^li-ac-/.test(n.id)) return true;
+          if (n && n.nodeType === 1) {
+            if (n.id && /^li-ac-/.test(n.id)) return true;
+            if (n.classList && (n.classList.contains(INLINE_KW_CLS) || n.classList.contains(INLINE_EMAIL_CLS) || n.classList.contains(PROMOTED_CLS))) return true;
+            if (n.querySelector && typeof n.querySelector === 'function' && n.querySelector('.' + INLINE_KW_CLS + ', .' + INLINE_EMAIL_CLS + ', .' + PROMOTED_CLS)) return true;
+          }
         }
         const t = m.target;
         const node = t && t.nodeType === 3 ? t.parentElement : t;
         if (!node || node.nodeType !== 1) return false;
+        if (node.classList && (node.classList.contains(INLINE_KW_CLS) || node.classList.contains(INLINE_EMAIL_CLS) || node.classList.contains(PROMOTED_CLS))) return true;
+        if (node.closest && node.closest('.' + INLINE_KW_CLS + ', .' + INLINE_EMAIL_CLS + ', .' + PROMOTED_CLS)) return true;
+        // Also check if target P contains a highlight mark child (added/removed case)
+        if (node.querySelector && node.querySelector('.' + INLINE_KW_CLS + ', .' + INLINE_EMAIL_CLS + ', .' + PROMOTED_CLS)) return true;
         return !!(node.closest && node.closest('#li-ac-panel, #li-ac-found-panel, #li-ac-styles, #li-ac-badge'));
       });
       if (own) return;
+      // Fast path: large feed loads (>20 mutations) — debounce slightly
+      if (mutations.length > 20) { hideRightRail(); scanFeed(); return; }
       hideRightRail();
       scanFeed();
     });
@@ -1643,9 +2418,12 @@
       knownEmails.clear(); // forget jumped-to emails so they can be re-centered
       knownKeywordKeys.clear();
       resetHitMeta(); // forget viewed/firstSeen
+      tagsExpanded = { include: false, exclude: false, highlight: false };
+      pendingHlRender = false;
       if (scanTimer) clearTimeout(scanTimer); // L4: don't let a pending scan re-hide
       teardownPage(); // LEAK #1/#2: stop the scroll-pin interval + remove its window listeners
       chrome.storage.sync.set({ autoScroll: false, ultraHide: false });
+      try { const store = chrome.storage && chrome.storage.local; if (store && store.remove) store.remove(VIEWED_STORAGE_KEY); if (store && store.set) store.set({ [VIEWED_STORAGE_KEY]: {} }); } catch (_) {}
       removeBadge();
       if (panel) { panel.remove(); panel = null; } // full reset clears the panel UI
       if (foundPanel) { foundPanel.remove(); foundPanel = null; }
@@ -1653,6 +2431,10 @@
       chatCollapsed = false;
       document.querySelectorAll('.li-ac-hl').forEach(el => { el.style.outline = ''; el.style.boxShadow = ''; el.classList.remove('li-ac-hl'); });
       clearKeywordHighlights();
+      clearInlineHighlights();
+      clearPromotedHighlights();
+      const jdReset = getJobDetailsElement();
+      if (jdReset) clearInlineHighlights([jdReset]);
       restoreHidden();
       // Clear Ultra Hide collapse classes too.
       document.querySelectorAll('.' + ULTRA_CLS).forEach(el => el.classList.remove(ULTRA_CLS));
@@ -1687,6 +2469,7 @@
     stopAutoScroll();
     stopTimeRefresh();
     stopChatMonitor();
+    stopViewportObserver();
     scrollLock.reset();
     if (feedObserver) { feedObserver.disconnect(); }
   }
@@ -1716,13 +2499,20 @@
 
   // === Load config + init ===
   chrome.storage.sync.get(
-    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false },
+    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, autoMarkSeen: true, highlightKeywords: [] },
     opts => {
+      // Ensure highlight defaults if missing (old installs) — migrate false → true for instant green
+      if (opts.highlightInline === undefined) opts.highlightInline = true;
+      if (opts.autoMarkSeen === undefined) opts.autoMarkSeen = true;
+      if (opts.highlightKeywords === undefined) opts.highlightKeywords = [];
+      opts.highlightKeywords = normalizeHighlightItems(opts.highlightKeywords);
       cfg = opts;
+      updateJobsBodyClass();
       kwSectionCollapsed = !!opts.kwSectionCollapsed;
       panelMinimized = !!opts.panelMinimized;
       foundPanelMinimized = !!opts.foundPanelMinimized;
       autoScrollDurationMin = Math.max(0, Math.floor(Number(opts.autoScrollDurationMin) || 0));
+      loadViewedFromStorage();
       // Don't let the browser/LinkedIn restore a previous scroll position on load;
       // start at top unless auto-scroll is explicitly enabled. Unlike a fixed
       // timeout, this keeps pinning while the feed is still growing, and releases
@@ -1794,7 +2584,7 @@
 
   onChangedListener = (changes, area) => {
     if (area !== 'sync') return;
-    ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin'].forEach(k => {
+    ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin', 'highlightInline', 'autoMarkSeen', 'highlightKeywords'].forEach(k => {
       // H3: a removed key reports {oldValue} with no newValue — don't write
       // undefined, which would crash .length/.forEach callers later.
       if (changes[k] && changes[k].newValue !== undefined) cfg[k] = changes[k].newValue;
@@ -1842,12 +2632,30 @@
         if (ultraToggle) ultraToggle.checked = !!cfg.ultraHide;
       }
     }
+    if (changes.highlightInline) {
+      if (panel) {
+        const hlInline = panel.querySelector('#li-ac-hl-inline');
+        if (hlInline) hlInline.checked = !!cfg.highlightInline;
+      }
+    }
+    if (changes.autoMarkSeen) {
+      if (panel) {
+        const autoSeen = panel.querySelector('#li-ac-auto-seen');
+        if (autoSeen) autoSeen.checked = !!cfg.autoMarkSeen;
+      }
+      if (cfg.autoMarkSeen) refreshViewportObserver(); else stopViewportObserver();
+    }
+    if (changes.highlightKeywords) {
+      let v = changes.highlightKeywords.newValue;
+      cfg.highlightKeywords = normalizeHighlightItems(v);
+      if (panel) renderHighlightTags(panel);
+    }
     if (changes.includeKeywords || changes.excludeKeywords) {
       restoreHidden(); // posts no longer matching come back, then re-filter
     }
     // L4: only re-scan when a field that affects scanning actually changed,
     // otherwise an unrelated storage write (e.g. debug) needlessly re-scans.
-    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails'];
+    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails', 'highlightInline', 'autoMarkSeen', 'highlightKeywords'];
     if (scanKeys.some(k => changes[k])) scanFeed();
   };
   chrome.storage.onChanged.addListener(onChangedListener);
@@ -1856,14 +2664,14 @@
   // Content scripts run in an isolated world, so attaching this to globalThis
   // never leaks into the page and has zero effect on production behavior.
   const testSurface = {
-    kwMatch, kwParts, esc, wordMatch, EMAIL_RE,
+    kwMatch, kwParts, esc, wordMatch, EMAIL_RE, INLINE_KW_CLS, INLINE_EMAIL_CLS, hexToRgba, getContrastColor, normalizeHighlightItems,
     getPosts, filterPosts, scanEmails, scanKeywords, expandPosts, scanButtons,
-    restoreHidden, getHiddenCount, getHiddenPosts, clearKeywordHighlights, injectStyles, hideRightRail,
+    restoreHidden, getHiddenCount, getHiddenPosts, clearKeywordHighlights, clearInlineHighlights, highlightKeywordsInline, highlightEmailsInline, highlightInElement, injectStyles, hideRightRail,
     revealHiddenPost, rehidePost, getRevealedHiddenKeys: () => revealedHiddenKeys,
     applyUltraHide,
     startFeedObserver, getScroller, renderTags, removeKeyword, escHtml,
     extractKeywordsFromPost, addRightClickedTo, captureRightClick,
-    startAutoScroll, stopAutoScroll, disableAutoScroll, scrollLock,
+    startAutoScroll, stopAutoScroll, disableAutoScroll, scrollLock, startViewportObserver, stopViewportObserver, refreshViewportObserver,
     getAutoScrollDurationMin, setAutoScrollDurationMin,
     knownEmailsAdd: e => knownEmails.add(e),
     knownEmailsClear: () => knownEmails.clear(),
@@ -1871,7 +2679,8 @@
     knownKeywordKeysClear: () => knownKeywordKeys.clear(),
     isAllowedUrl, refreshUrlGate, applyGateOverlays,
     startUrlGateMonitor, stopUrlGateMonitor, stopTimeRefresh, startTimeRefresh,
-    timeAgo, postKey, markViewed, resetHitMeta, clearSeen, applyViewedBorders,
+    timeAgo, postKey, markViewed, resetHitMeta, clearSeen, applyViewedBorders, loadViewedFromStorage, persistViewedKeys,
+    dismissedKeys: () => dismissedKeys, VIEWED_STORAGE_KEY, VIEWED_CAP, VIEWED_TTL_MS,
     postBodyText,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,

@@ -25,7 +25,7 @@ const DEFAULTS = {
   debug: false
 };
 
-const NOTICE = 'Works only on LinkedIn Search & Feed pages';
+const NOTICE = 'Works only on LinkedIn Search, Feed & Jobs pages';
 
 // jsdom-safe location override: returns the previous location for restore.
 function setLocation(url) {

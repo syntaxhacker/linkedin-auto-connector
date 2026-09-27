@@ -58,7 +58,6 @@ const STORAGE_DEFAULTS = {
   excludeKeywords: [],
   highlightKeywords: [],
   highlightInline: true,
-  autoMarkSeen: true,
   autoScroll: true,
   debug: true,
   panelMinimized: false,

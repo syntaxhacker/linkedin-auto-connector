@@ -36,7 +36,7 @@
   };
 
   // === Feed scanner config ===
-  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, autoMarkSeen: false, highlightKeywords: [] };
+  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, highlightKeywords: [] };
 
   // === Found panel tabs + responsive layout ===
   let foundActiveTab = 'kw'; // 'kw' | 'em' | 'hidden'
@@ -72,7 +72,7 @@
     const path = String(l.pathname || '');
     return path === '/search' || path.startsWith('/search/') ||
            path === '/feed' || path.startsWith('/feed/') ||
-           path === '/jobs/search' || path.startsWith('/jobs/search/') ||
+           path === '/jobs/search' || path.startsWith('/jobs/search') ||
            // Company people pages list "Invite ... to connect" buttons (Pattern B).
            /^\/company\/[^/]+\/people\/?$/.test(path);
   }
@@ -80,7 +80,7 @@
     const l = loc || (typeof window !== 'undefined' ? window.location : null);
     if (!l) return false;
     const path = String(l.pathname || '');
-    return path === '/jobs/search' || path.startsWith('/jobs/search/');
+    return path === '/jobs/search' || path.startsWith('/jobs/search');
   }
 
   // === Inline highlight constants (last-pane highlight feature) ===
@@ -138,7 +138,7 @@
     } else {
       injectStyles();
       scanFeed();
-      if (cfg.autoScroll) startAutoScroll(); // restart auto-scroll when returning to Search/Feed
+      if (cfg.autoScroll && !isJobsPage()) startAutoScroll(); // restart auto-scroll when returning to Search/Feed (not jobs)
     }
     // Highlights section visible on all allowed pages (Jobs + Feed/Search)
     try {
@@ -239,6 +239,16 @@
   // email matches (and posts the user manually revealed). Applies to the whole
   // feed each scan, so newly-loaded posts are handled too. Off → strips classes.
   function applyUltraHide(kwHits, emHits) {
+    if (isJobsPage()) {
+      // never collapse left-side job cards — highlights only
+      const posts = getPosts();
+      posts.forEach(p => {
+        p.classList.remove(ULTRA_CLS);
+        const card = p.closest('[role="listitem"]');
+        if (card && card !== p) card.classList.remove(ULTRA_CARD_CLS);
+      });
+      return;
+    }
     const posts = getPosts();
     if (!cfg.ultraHide) {
       posts.forEach(p => {
@@ -286,6 +296,13 @@
       // Jobs page: left list should have no left borders/outlines (user request)
       'body.jobs-page ' + '.' + VIEWED_CLS + ' { box-shadow: none !important; }' +
       'body.jobs-page ' + '.' + HL_CLS + ' { outline: none !important; box-shadow: none !important; }' +
+      // Jobs search results: highlights-only mode — hide feed-only controls via CSS (:has handles parent rows)
+      'body.jobs-page #li-ac-panel-body > div:has(#li-ac-autoscroll) { display: none !important; }' +
+      'body.jobs-page #li-ac-panel-body > div:has(#li-ac-ultra-hide) { display: none !important; }' +
+      'body.jobs-page #li-ac-panel-body > div:has(#li-ac-autoscroll-min) { display: none !important; }' +
+      'body.jobs-page #li-ac-kw-section { display: none !important; }' +
+      'body.jobs-page #li-ac-panel-body > div:has(#li-ac-kw-collapse) { display: none !important; }' +
+      'body.jobs-page #li-ac-found-panel { display: none !important; }' +
       'div[data-componentkey="SearchResults_SearchRightRail"] { display: none !important; }' +
       '.search-reusable-search-right-rail { display: none !important; }';
     document.head.appendChild(style);
@@ -484,23 +501,29 @@
       .map(h => h.parentElement)
       .filter(p => p && !p.classList.contains(HIDDEN_CLS));
     if (feedPosts.length) return feedPosts;
-    // Jobs search fallback — job cards on /jobs/search (actual LinkedIn DOM: li[data-occludable-job-id] / div[data-job-id])
+    // Jobs search fallback — job cards on /jobs/search* (LinkedIn DOM drifts: 2026 now uses componentkey="job-card-component-ref-*")
     if (isJobsPage()) {
       const jobCards = Array.from(document.querySelectorAll(
-        'li[data-occludable-job-id], div[data-job-id], .job-card-container, li.scaffold-layout__list-item, .jobs-search__results-list__list-item'
+        'li[data-occludable-job-id], div[data-job-id], .job-card-container, li.scaffold-layout__list-item, .jobs-search__results-list__list-item, [componentkey*="job-card-component"]'
       )).map(el => {
-        // Normalize to card wrapper
-        const card = el.closest('li[data-occludable-job-id]') || el.closest('div[data-job-id]') || el.closest('.jobs-search__results-list__list-item') || el;
+        // Normalize to card wrapper — prefer the outer role=button card to avoid inner/outer duplicates
+        const card = el.closest('[componentkey*="job-card-component"][role="button"]') || el.closest('[componentkey*="job-card-component"]') || el.closest('li[data-occludable-job-id]') || el.closest('div[data-job-id]') || el.closest('.jobs-search__results-list__list-item') || el;
         return card;
       }).filter((v,i,a) => v && a.indexOf(v)===i && !v.classList.contains(HIDDEN_CLS) && v.textContent.trim().length > 20);
+      // De-dupe wrapper duplicates that share identical text (inner + outer both carry componentkey)
+      const seenKeys = new Set();
+      const deduped = jobCards.filter(c => { const k = (c.textContent||'').replace(/\s+/g,' ').trim().slice(0,80); if (seenKeys.has(k)) return false; seenKeys.add(k); return true; });
+      if (deduped.length) return deduped;
       if (jobCards.length) return jobCards;
     }
     return feedPosts;
   }
   function getJobDetailsElement() {
     if (!isJobsPage()) return null;
-    // Try multiple selectors for LinkedIn's job details pane (right side)
-    return document.querySelector('.jobs-search__job-details--container') ||
+    // Try multiple selectors for LinkedIn's job details pane (right side) — 2026 DOM uses componentkey="JobDetails_AboutTheJob_*"
+    return document.querySelector('[componentkey*="JobDetails_AboutTheJob"]') ||
+           document.querySelector('[id^="JobDetails_AboutTheJob"]') ||
+           document.querySelector('.jobs-search__job-details--container') ||
            document.querySelector('.scaffold-layout__detail') ||
            document.querySelector('[data-job-details]') ||
            document.querySelector('.jobs-details__main-content') ||
@@ -514,6 +537,27 @@
     try {
       if (isJobsPage()) document.body.classList.add('jobs-page');
       else document.body.classList.remove('jobs-page');
+    } catch (_) {}
+    // JS fallback for jobs-only highlights mode (covers browsers without :has and dynamic toggles)
+    try {
+      const isJobs = isJobsPage();
+      if (panel) {
+        const a = panel.querySelector('#li-ac-autoscroll');
+        if (a && a.parentElement) a.parentElement.style.display = isJobs ? 'none' : '';
+        const u = panel.querySelector('#li-ac-ultra-hide');
+        if (u && u.parentElement) u.parentElement.style.display = isJobs ? 'none' : '';
+        const m = panel.querySelector('#li-ac-autoscroll-min');
+        if (m && m.parentElement) m.parentElement.style.display = isJobs ? 'none' : '';
+        const kw = panel.querySelector('#li-ac-kw-section');
+        if (kw) kw.style.display = isJobs ? 'none' : '';
+        const kwHeader = panel.querySelector('#li-ac-kw-collapse');
+        if (kwHeader && kwHeader.parentElement) kwHeader.parentElement.style.display = isJobs ? 'none' : '';
+      }
+      if (foundPanel) {
+        // hide entire found panel on jobs search results — highlights are inline only
+        if (isJobs) foundPanel.style.display = 'none';
+        else if (!isCollapsed()) foundPanel.style.display = 'flex';
+      }
     } catch (_) {}
   }
   function clearPromotedHighlights(posts) {
@@ -681,6 +725,7 @@
   }
 
   function filterPosts(posts) {
+    if (isJobsPage()) return 0; // jobs left list never hidden — highlights only per user
     let hidden = 0;
     const excludes = strArray(cfg.excludeKeywords);
     posts.forEach(p => {
@@ -955,60 +1000,6 @@
       }
     });
     return hits;
-  }
-
-  // === Auto-mark read on viewport (instant green border) — disabled on Jobs left (no borders per user)
-  let viewportObserver = null;
-  const seenTimers = new Map();
-  function startViewportObserver() {
-    stopViewportObserver();
-    if (!cfg.autoMarkSeen) return;
-    if (isJobsPage()) return; // Jobs left: no green borders
-    if (typeof IntersectionObserver === 'undefined') return;
-    viewportObserver = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        const el = entry.target;
-        const key = postKey(el);
-        if (!key) return;
-        if (isDismissedForEl('kw', key, el) || isDismissedForEl('em', key, el)) return;
-        // Instant green on any feed post that becomes 30% visible — no debounce, keep in list
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.3) {
-          if (el.classList.contains(VIEWED_CLS)) return;
-          if (!el.isConnected) return;
-          const metaKw = hitMeta.get('kw:' + key);
-          const metaEm = hitMeta.get('em:' + key);
-          if (metaKw) metaKw.viewed = true;
-          if (metaEm) metaEm.viewed = true;
-          if (!metaKw && !metaEm) ensureMeta('kw', key).viewed = true;
-          el.classList.add(VIEWED_CLS);
-          dbg('auto-marked viewed (viewport 30% instant):', key.slice(0,40));
-          renderPanel(panelData, kwPanelData);
-        }
-      });
-    }, { threshold: [0.3, 0.6] });
-    // Observe ALL feed posts for instant green, not just hits
-    const posts = getPosts();
-    posts.forEach(p => {
-      if (p && p.isConnected) {
-        try { viewportObserver.observe(p); } catch (_) {}
-      }
-    });
-    // Also observe current hits (covers hidden/filtered cases)
-    const allHits = (kwPanelData || []).concat(panelData || []);
-    allHits.forEach(h => {
-      if (h.el && h.el.isConnected) {
-        try { viewportObserver.observe(h.el); } catch (_) {}
-      }
-    });
-  }
-  function stopViewportObserver() {
-    if (viewportObserver) { viewportObserver.disconnect(); viewportObserver = null; }
-    seenTimers.forEach(t => clearTimeout(t));
-    seenTimers.clear();
-  }
-  function refreshViewportObserver() {
-    if (!cfg.autoMarkSeen) { stopViewportObserver(); return; }
-    startViewportObserver();
   }
 
   // === Right-click → add post keywords to include/exclude ===
@@ -1557,8 +1548,9 @@
   // Single source of truth for collapsed/expanded visuals on both panels + bubble.
   function applyCollapsed() {
     const collapsed = isCollapsed();
+    const isJobs = isJobsPage();
     if (panel) panel.style.display = collapsed ? 'none' : '';
-    if (foundPanel) foundPanel.style.display = collapsed ? 'none' : 'flex';
+    if (foundPanel) foundPanel.style.display = (collapsed || isJobs) ? 'none' : 'flex';
     ensureBubble().style.display = collapsed ? 'flex' : 'none';
     if (panel) {
       const btn = panel.querySelector('#li-ac-panel-min');
@@ -1785,11 +1777,7 @@
               '<input type="checkbox" id="li-ac-hl-inline" style="accent-color:' + C.warn + ';width:15px;height:15px;"' + (cfg.highlightInline ? ' checked' : '') + '>' +
               '<span>Enable highlight inline</span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;" title="Auto-mark read after 60% visible for 2s — green border, persists globally">' +
-              '<input type="checkbox" id="li-ac-auto-seen" style="accent-color:' + C.ok + ';width:15px;height:15px;"' + (cfg.autoMarkSeen ? ' checked' : '') + '>' +
-              '<span>👁 Auto-mark seen <span style="font-size:11px;color:' + BW.muted + ';">(40% / 0.3s → green (keeps in list))</span></span>' +
-            '</label>' +
-            '<div style="font-size:11px;color:' + BW.muted + ';margin-top:6px;line-height:1.4;">Highlight words glow per-tag color (● picker) directly in post. Viewed = <span style="box-shadow:inset 3px 0 0 ' + C.ok + ';padding-left:4px;">green</span> border (keeps in list; Clear seen removes).</div>' +
+            '<div style="font-size:11px;color:' + BW.muted + ';margin-top:6px;line-height:1.4;">Highlight words glow per-tag color (● picker) directly in post. Click a row to mark <span style="box-shadow:inset 3px 0 0 ' + C.ok + ';padding-left:4px;">seen</span> (green, keeps in list); <b>Clear seen</b> removes seen rows.</div>' +
           '</div>' +
           '</div>';
       document.body.appendChild(panel);
@@ -1858,13 +1846,6 @@
         chrome.storage.sync.set({ highlightInline: cfg.highlightInline });
         dbg('highlightInline set to', cfg.highlightInline);
         scanFeed();
-      });
-      const autoSeen = panel.querySelector('#li-ac-auto-seen');
-      if (autoSeen) autoSeen.addEventListener('change', () => {
-        cfg.autoMarkSeen = autoSeen.checked;
-        chrome.storage.sync.set({ autoMarkSeen: cfg.autoMarkSeen });
-        dbg('autoMarkSeen set to', cfg.autoMarkSeen);
-        if (cfg.autoMarkSeen) refreshViewportObserver(); else stopViewportObserver();
       });
       applyKwSection(panel);
       applyPanelMinimized(panel);
@@ -1963,8 +1944,6 @@
       if (ultraToggle) ultraToggle.checked = !!cfg.ultraHide;
       const hlInline = panel.querySelector('#li-ac-hl-inline');
       if (hlInline) hlInline.checked = !!cfg.highlightInline;
-      const autoSeen = panel.querySelector('#li-ac-auto-seen');
-      if (autoSeen) autoSeen.checked = !!cfg.autoMarkSeen;
       // Self-heal: if highlight section missing (old panel), inject it
       if (!panel.querySelector('#li-ac-highlight-section')) {
         const body = panel.querySelector('#li-ac-panel-body');
@@ -1975,8 +1954,7 @@
           sec.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.warn + ';margin-bottom:8px;"><span>✨ Highlights — last pane</span><span style="font-size:10px;color:' + BW.muted + ';font-weight:400;">quick eye grab</span></div>' +
             '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Highlight words (independent)</div><input id="li-ac-hl-input" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react, python, tanstack · Enter"><div id="li-ac-tags-highlight" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>' +
             '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" id="li-ac-hl-inline" style="accent-color:' + C.warn + ';width:15px;height:15px;"' + (cfg.highlightInline ? ' checked' : '') + '><span>Enable highlight inline</span></label>' +
-            '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" id="li-ac-auto-seen" style="accent-color:' + C.ok + ';width:15px;height:15px;"' + (cfg.autoMarkSeen ? ' checked' : '') + '><span>👁 Auto-mark seen <span style="font-size:11px;color:' + BW.muted + ';">(40% / 0.3s → green (keeps in list))</span></span></label>' +
-            '<div style="font-size:11px;color:' + BW.muted + ';margin-top:6px;line-height:1.4;">Highlight words glow per-tag color directly in post. Pick color via ● next to each tag. Viewed = <span style="box-shadow:inset 3px 0 0 ' + C.ok + ';padding-left:4px;">green</span> border (keeps in list; Clear seen removes).</div>';
+            '<div style="font-size:11px;color:' + BW.muted + ';margin-top:6px;line-height:1.4;">Highlight words glow per-tag color directly in post. Click a row to mark <span style="box-shadow:inset 3px 0 0 ' + C.ok + ';padding-left:4px;">seen</span> (green, keeps in list); <b>Clear seen</b> removes seen rows.</div>';
           body.appendChild(sec);
           const hlInputSec = sec.querySelector('#li-ac-hl-input');
           if (hlInputSec) hlInputSec.addEventListener('keydown', e => {
@@ -1996,7 +1974,6 @@
             }
           });
           sec.querySelector('#li-ac-hl-inline').addEventListener('change', () => { cfg.highlightInline = sec.querySelector('#li-ac-hl-inline').checked; chrome.storage.sync.set({ highlightInline: cfg.highlightInline }); scanFeed(); });
-          sec.querySelector('#li-ac-auto-seen').addEventListener('change', () => { cfg.autoMarkSeen = sec.querySelector('#li-ac-auto-seen').checked; chrome.storage.sync.set({ autoMarkSeen: cfg.autoMarkSeen }); if (cfg.autoMarkSeen) refreshViewportObserver(); else stopViewportObserver(); });
           renderHighlightTags(sec);
         }
       }
@@ -2080,7 +2057,7 @@
     // Also: auto-scroll only ever advances DOWN — we never scroll up to a hit
     // that's already above the viewport (that's what caused the "scrolls
     // upward" jumps).
-    if (cfg.autoScroll) {
+    if (cfg.autoScroll && !isJobsPage()) {
       // Find the first hit that carries at least one email we haven't centered on.
       let jumpTarget = null;
       let freshEmails = [];
@@ -2180,7 +2157,6 @@
       applyUltraHide(kwFiltered, emHits);
       // Green marker on posts removed via "Clear seen" (survives re-renders).
       applyViewedBorders(posts);
-      if (cfg.autoMarkSeen) refreshViewportObserver();
     }, 400);
   }
 
@@ -2267,6 +2243,7 @@
       }, autoScrollDurationMin * 60000);
     }
     autoScrollTimer = setInterval(() => {
+      if (isJobsPage()) return; // jobs search results: highlights only, no auto-scroll
       // Only scroll when a real feed is present. This script also runs on
       // profile/messaging/etc. pages, where scrolling is unwanted.
       if (!getPosts().length) { dbg('auto-scroll: no feed on this page; skipping'); return; }
@@ -2464,7 +2441,6 @@
     stopAutoScroll();
     stopTimeRefresh();
     stopChatMonitor();
-    stopViewportObserver();
     scrollLock.reset();
     if (feedObserver) { feedObserver.disconnect(); }
   }
@@ -2494,11 +2470,10 @@
 
   // === Load config + init ===
   chrome.storage.sync.get(
-    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, autoMarkSeen: false, highlightKeywords: [] },
+    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, highlightKeywords: [] },
     opts => {
       // Ensure highlight defaults if missing (old installs)
       if (opts.highlightInline === undefined) opts.highlightInline = true;
-      if (opts.autoMarkSeen === undefined) opts.autoMarkSeen = false;
       if (opts.highlightKeywords === undefined) opts.highlightKeywords = [];
       opts.highlightKeywords = normalizeHighlightItems(opts.highlightKeywords);
       cfg = opts;
@@ -2568,7 +2543,7 @@
       hideRightRail();
       if (isAllowedUrl()) {
         scanFeed();
-        if (cfg.autoScroll) startAutoScroll();
+        if (cfg.autoScroll && !isJobsPage()) startAutoScroll();
       } else {
         renderGatedPanels(); // URL gate: show blurred notice panels immediately
       }
@@ -2579,7 +2554,7 @@
 
   onChangedListener = (changes, area) => {
     if (area !== 'sync') return;
-    ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin', 'highlightInline', 'autoMarkSeen', 'highlightKeywords'].forEach(k => {
+    ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin', 'highlightInline', 'highlightKeywords'].forEach(k => {
       // H3: a removed key reports {oldValue} with no newValue — don't write
       // undefined, which would crash .length/.forEach callers later.
       if (changes[k] && changes[k].newValue !== undefined) cfg[k] = changes[k].newValue;
@@ -2619,7 +2594,7 @@
         const toggle = panel.querySelector('#li-ac-autoscroll');
         if (toggle) toggle.checked = !!cfg.autoScroll;
       }
-      if (cfg.autoScroll) startAutoScroll(); else stopAutoScroll();
+      if (cfg.autoScroll && !isJobsPage()) startAutoScroll(); else stopAutoScroll();
     }
     if (changes.ultraHide) {
       if (panel) {
@@ -2633,13 +2608,6 @@
         if (hlInline) hlInline.checked = !!cfg.highlightInline;
       }
     }
-    if (changes.autoMarkSeen) {
-      if (panel) {
-        const autoSeen = panel.querySelector('#li-ac-auto-seen');
-        if (autoSeen) autoSeen.checked = !!cfg.autoMarkSeen;
-      }
-      if (cfg.autoMarkSeen) refreshViewportObserver(); else stopViewportObserver();
-    }
     if (changes.highlightKeywords) {
       let v = changes.highlightKeywords.newValue;
       cfg.highlightKeywords = normalizeHighlightItems(v);
@@ -2650,7 +2618,7 @@
     }
     // L4: only re-scan when a field that affects scanning actually changed,
     // otherwise an unrelated storage write (e.g. debug) needlessly re-scans.
-    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails', 'highlightInline', 'autoMarkSeen', 'highlightKeywords'];
+    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails', 'highlightInline', 'highlightKeywords'];
     if (scanKeys.some(k => changes[k])) scanFeed();
   };
   chrome.storage.onChanged.addListener(onChangedListener);
@@ -2666,7 +2634,7 @@
     applyUltraHide,
     startFeedObserver, getScroller, renderTags, removeKeyword, escHtml,
     extractKeywordsFromPost, addRightClickedTo, captureRightClick,
-    startAutoScroll, stopAutoScroll, disableAutoScroll, scrollLock, startViewportObserver, stopViewportObserver, refreshViewportObserver,
+    startAutoScroll, stopAutoScroll, disableAutoScroll, scrollLock,
     getAutoScrollDurationMin, setAutoScrollDurationMin,
     knownEmailsAdd: e => knownEmails.add(e),
     knownEmailsClear: () => knownEmails.clear(),

@@ -60,6 +60,16 @@ const STORAGE_DEFAULTS = {
   highlightInline: true,
   autoScroll: true,
   debug: true,
+  jevMode: false,
+  jevPrompt: '',
+  jevFollowKeywords: false,
+  jevMinConfidence: 0.7,
+  llmProviderId: 'jev',
+  llmEndpoints: {},
+  llmModels: {},
+  llmDailyCapPosts: 500,
+  llmPerMinReq: 20,
+  llmMinRunGapMs: 3000,
   panelMinimized: false,
   foundPanelMinimized: false
 };
@@ -99,7 +109,7 @@ global.chrome = {
         global.__onMessage = listener;
       })
     }
-  }
+  },
 };
 
 // ---------------------------------------------------------------------------

@@ -86,10 +86,15 @@ dashboard work needed. Steps:
 - **Colors**: `palette.js` (`LI_PALETTE`) — content.js reads it; popup.html
   mirrors it as CSS vars. Keep in sync manually.
 - **Config**: `cfg` from `chrome.storage.sync`, defaulted in
-  `chrome.storage.sync.get(...)` (content.js:1505) and at `let cfg = {...}`
+  `chrome.storage.sync.get(...)` (content.js:3486) and at `let cfg = {...}`
   (content.js:39). Keys: `autoExpand, scanEmails, includeKeywords,
   excludeKeywords, autoScroll, ultraHide, debug, kwSectionCollapsed,
-  autoScrollDurationMin, panelMinimized, foundPanelMinimized`.
+  autoScrollDurationMin, panelMinimized, foundPanelMinimized,
+  highlightInline, highlightKeywords, jevMode, jevPrompt, jevFollowKeywords,
+  jevMinConfidence, llmProviderId, llmEndpoints, llmModels,
+  llmDailyCapPosts, llmPerMinReq, llmMinRunGapMs` (plus per-provider API keys
+  in `chrome.storage.local` only — never synced, never logged, never rendered
+  back into the panel DOM).
 - **Hidden state**: `.li-ac-hidden` class on the post element (single source).
   Card wrapper gets `.li-ac-hidden-card` so the comment thread collapses too.
 - **Focus/Ultra mode**: `.li-ac-ultra` (+ `-card`) on non-matching posts only;
@@ -117,9 +122,36 @@ dashboard work needed. Steps:
   with per-post **Show/Hide** (`revealHiddenPost` / `rehidePost`); row text
   click scrolls to the post.
 - **Focus mode** → collapses all non-matching posts.
+- **Jev mode (AI categorize)** → toggle `#li-ac-jev-mode` skips the whole
+  keyword pipeline (`filterPosts/scanKeywords/scanEmails/highlights/ultraHide`)
+  and auto-categorizes unseen posts per scan via `llmClassifyPosts` →
+  provider registry (`LLM_PROVIDERS`: `jev` default + `openai-compat`) →
+  background `LLM_FETCH` relay (extension process, no CORS preflight).
+  Chips (`.li-ac-jev-chip`: only relevant stays visible) are the UI;
+  everything else (excluded, unsure, other) collapses to a thin 1-line strip
+  (`.li-ac-jev-concealed` on the post + `-card` on the LinkedIn
+  `[role="listitem"]` wrapper, max-height 2.5em, hover to peek) — deliberately
+  NOT display:none, which broke LinkedIn's virtualized list layout (scroll
+  felt wrong, new results stopped lazy-loading, and the added scroll runway
+  oscillated). Pending marker is the class
+  `.li-ac-jev-pending` + CSS ::before badge (never a DOM child — a child would
+  shift `postKey`'s textContent fallback and strand queued posts). Storm control without caps: 3s min gap
+  between classify runs (`llmMinRunGapMs`), busy/paced cohorts always schedule
+  a follow-up scan. Guardrails (currently unlimited —
+  caps/throttle implemented + counted but not enforced; kill-switch on):
+  in-flight guard, 30s timeout, 20/batch, 200/session, 500/day
+  (`llmDailyCapPosts`), 20/min throttle, 401/double-429 kill-switch with panel
+  Retry, live cost line. Prompt textarea is fully manual (empty = silent
+  auto-build from keywords at scan time); Autofill fills+saves on demand,
+  ↺ clears to auto mode, every save shows ✓ feedback next to the label.
+  Opt-in `jevFollowKeywords` checkbox reuses include/exclude to keep the
+  prompt synced (auto-disables when custom text is typed; skips focused
+  drafts). Keys live in
+  `chrome.storage.local` only; entering Jev mode unhides/uncollapses
+  keyword-mode posts, exiting calls `jevReset()`.
 - **Clear seen** → removes viewed rows; green marker stays on those feed posts
   until RESET.
-- **URL gate** → extension only works on `/search`, `/feed`, and
+- **URL gate** → extension works on `/search`, `/feed`, `/jobs/search`, and
   `/company/*/people/`; elsewhere both panels show a blurred notice
   (`applyGateOverlays`).
 - **Panels never close** → there is no ✕ close button. Both panels collapse

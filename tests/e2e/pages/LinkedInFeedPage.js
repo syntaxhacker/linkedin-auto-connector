@@ -47,8 +47,12 @@ class LinkedInFeedPage {
       // Minimal chrome mock
       window.__storageData = {
         autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: false,
-        kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false
+        kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false,
+        highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevFollowKeywords: false,
+        jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {},
+        llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000
       };
+      window.__localData = { llmKeys: {}, llmDaily: null };
       window.chrome = {
         storage: {
           sync: {
@@ -67,15 +71,38 @@ class LinkedInFeedPage {
               if (cb) cb();
             }
           },
+          local: {
+            get(defaults, cb) {
+              const out = Object.assign({}, defaults, window.__localData);
+              if (cb) cb(out);
+            },
+            set(obj, cb) { Object.assign(window.__localData, obj); if (cb) cb(); },
+            remove(key, cb) { delete window.__localData[key]; if (cb) cb(); }
+          },
           onChanged: {
             addListener(fn) { window.__onChanged = fn; },
             removeListener() { window.__onChanged = null; }
           }
         },
+        permissions: {
+          request: (_p, cb) => { if (cb) cb(true); },
+          contains: (_p, cb) => { if (cb) cb(true); }
+        },
         runtime: {
           onMessage: {
             addListener(fn) { window.__onMessage = fn; },
             removeListener() {}
+          },
+          // Stubbed LLM relay: tests override window.__llmRelayImpl per spec.
+          sendMessage: (msg, cb) => {
+            if (msg && msg.type === 'LLM_FETCH' && window.__llmRelayImpl) {
+              window.__llmRelayImpl(msg).then(
+                resp => cb(resp),
+                err => cb({ ok: false, status: 0, text: '', error: String((err && err.message) || err) })
+              );
+              return;
+            }
+            if (cb) cb(undefined);
           },
           lastError: null
         },

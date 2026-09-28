@@ -39,7 +39,18 @@ describe('content.js initialization', () => {
       'knownEmailsAdd', 'knownEmailsClear', 'timeAgo',
       'postKey', 'markViewed', 'resetHitMeta', 'sortedHits',
       'getKwSectionCollapsed', 'setKwSectionCollapsed', 'toggleKwSection',
-      'getCfg', 'setCfg', 'getCounts', 'cleanup'
+      'getCfg', 'setCfg', 'getCounts', 'cleanup',
+      // Jev / LLM surface
+      'buildJevCategories', 'buildJevPrompt', 'getEffectiveJevPrompt',
+      'buildJevQuestions', 'buildJevItems', 'truncatePostText',
+      'jevUnseenPosts', 'jevClassifyPosts', 'llmClassifyPosts', 'jevReset',
+      'applyJevChip', 'markJevPending', 'updateJevStatus',
+      'setJevApiKey', 'getJevApiKey', 'setLlmKey', 'getLlmKey',
+      'migrateLegacyLlmKeys', 'canClassify', 'getLlmStats',
+      'clearLlmKill', 'resetLlmSession', 'resetLlmDaily', 'handleLlmLocalLoad',
+      'getLlmTransport', 'getProvider', 'validateEndpoint',
+      'isDefaultLlmHost', 'resolveJevCategory',
+      'jevConcealedCount', 'applyJevVisibilityAll', 'migrateLlmDefaults'
     ];
     for (const fn of fns) {
       expect(typeof global.__LI[fn]).toBe('function');

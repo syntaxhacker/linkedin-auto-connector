@@ -51,7 +51,7 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await fp.feedScan();
 
     const relevant = page.locator('#li-ac-jev-cell-relevant');
-    await expect(relevant).toHaveValue(/hiring|role/i);
+    await expect(relevant).toHaveValue('');
     await expect(page.locator('#li-ac-jev-prompt-preview')).toContainText('Classify the quoted post into exactly one category.');
     await expect(page.locator('#li-ac-jev-prompt')).toHaveCount(0); // legacy textarea gone
     await relevant.fill('Senior fintech React only');

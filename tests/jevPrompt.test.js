@@ -17,8 +17,8 @@ describe('jev prompt builder (compat surface)', () => {
     global.__LI.setCfg({ includeKeywords: ['react', 'senior'], excludeKeywords: ['intern'] });
     const cats = global.__LI.buildJevCategories();
     expect(Object.keys(cats).sort()).toEqual(['excluded', 'other', 'relevant']);
-    expect(cats.relevant).not.toMatch(/react/i);
-    expect(cats.excluded).not.toMatch(/intern/i);
+    expect(cats.relevant).toBe('');
+    expect(cats.excluded).toBe('');
   });
 
   test('effective prompt keeps the fixed skeleton and reflects a cell override', () => {
@@ -56,7 +56,6 @@ describe('jev category cells (manual + autofill)', () => {
   const saved = () => document.querySelector('#li-ac-jev-saved');
 
   test('three fixed cells render and the preview shows the fixed skeleton', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react'] });
     await openPanel();
     expect(cell('relevant')).not.toBeNull();
     expect(cell('excluded')).not.toBeNull();
@@ -66,10 +65,12 @@ describe('jev category cells (manual + autofill)', () => {
     expect(preview().textContent).toContain(global.__LI.JEV_PROMPT_TIE_BREAK);
   });
 
-  test('cells show the standalone defaults', async () => {
+  test('cells start empty with placeholders', async () => {
     await openPanel();
-    expect(cell('relevant').value).toMatch(/hiring|role/i);
-    expect(cell('other').value).toMatch(/anything else/i);
+    expect(cell('relevant').value).toBe('');
+    expect(cell('excluded').value).toBe('');
+    expect(cell('other').value).toBe('');
+    expect(cell('relevant').getAttribute('placeholder')).toMatch(/e\.g\./i);
   });
 
   test('editing a cell saves it and the preview follows', async () => {
@@ -82,23 +83,23 @@ describe('jev category cells (manual + autofill)', () => {
     expect(saved().textContent).toMatch(/saved/i);
   });
 
-  test('clearing a cell restores the default', async () => {
+  test('clearing a cell empties it again', async () => {
     await openPanel();
     cell('relevant').value = 'temp override';
     cell('relevant').dispatchEvent(new Event('change', { bubbles: true }));
     cell('relevant').value = '';
     cell('relevant').dispatchEvent(new Event('change', { bubbles: true }));
     expect(global.__LI.getCfg().jevCategoryText.relevant).toBeUndefined();
-    expect(cell('relevant').value).toMatch(/hiring|role/i);
+    expect(cell('relevant').value).toBe('');
   });
 
-  test('reset clears overrides back to defaults', async () => {
+  test('reset clears overrides back to empty', async () => {
     global.__LI.setCfg({ jevCategoryText: { relevant: 'custom' } });
     await openPanel();
     document.querySelector('#li-ac-jev-prompt-reset').click();
     expect(global.__LI.getCfg().jevCategoryText).toEqual({});
-    expect(cell('relevant').value).toMatch(/hiring|role/i);
-    expect(saved().textContent).toMatch(/default/i);
+    expect(cell('relevant').value).toBe('');
+    expect(saved().textContent).toMatch(/cleared/i);
   });
 
   test('min-confidence input clamps to 0..1, empty means default', async () => {

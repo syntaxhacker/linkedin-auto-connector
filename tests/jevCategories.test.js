@@ -40,31 +40,26 @@ function resetCfg() {
 // ---------------------------------------------------------------------------
 // 1. buildJevCategoryText — pure keyword-derived defaults
 // ---------------------------------------------------------------------------
-describe('buildJevCategoryText() — static defaults', () => {
-  test('returns exactly the three fixed keys', () => {
+describe('buildJevCategoryText() — empty by default', () => {
+  test('returns exactly the three fixed keys, all empty', () => {
     const cells = global.__LI.buildJevCategoryText();
     expect(Object.keys(cells).sort()).toEqual(FIXED_KEYS);
+    expect(cells.relevant).toBe('');
+    expect(cells.excluded).toBe('');
+    expect(cells.other).toBe('');
   });
 
-  test('relevant default mentions hiring/roles', () => {
-    expect(global.__LI.buildJevCategoryText().relevant).toMatch(/hiring|role/i);
+  test('placeholders exist for the UI but are never the value', () => {
+    const ph = global.__LI.JEV_CATEGORY_PLACEHOLDERS;
+    FIXED_KEYS.forEach(k => expect(typeof ph[k]).toBe('string'));
+    expect(global.__LI.getJevCategoryCells().relevant).not.toBe(ph.relevant);
   });
 
-  test('excluded default mentions not-interested / not fit', () => {
-    expect(global.__LI.buildJevCategoryText().excluded).toMatch(/not interested|not fit/i);
-  });
-
-  test('other default is a short "anything else" string', () => {
-    const cells = global.__LI.buildJevCategoryText();
-    expect(cells.other).toMatch(/anything else/i);
-    expect(cells.other.length).toBeLessThan(120);
-  });
-
-  test('keywords no longer shape the category text', () => {
+  test('keywords do not shape the cells directly (only via the one-time seed)', () => {
     global.__LI.setCfg({ includeKeywords: ['react'], excludeKeywords: ['intern'] });
     const cells = global.__LI.getJevCategoryCells();
-    expect(cells.relevant).not.toMatch(/react/i);
-    expect(cells.excluded).not.toMatch(/intern/i);
+    expect(cells.relevant).toBe('');
+    expect(cells.excluded).toBe('');
   });
 });
 
@@ -88,12 +83,12 @@ describe('getJevCategoryCells() — effective values', () => {
     resetCfg();
   });
 
-  test('returns the three fixed keys with defaults when nothing is overridden', () => {
+  test('returns the three fixed keys, empty when nothing is overridden', () => {
     const cells = global.__LI.getJevCategoryCells();
     expect(Object.keys(cells).sort()).toEqual(FIXED_KEYS);
-    expect(cells.relevant).toMatch(/hiring|job|role/i);
-    expect(cells.excluded).toMatch(/not interested|not fit/i);
-    expect(cells.other).toMatch(/anything else/i);
+    expect(cells.relevant).toBe('');
+    expect(cells.excluded).toBe('');
+    expect(cells.other).toBe('');
   });
 
   test('non-blank overrides win; blank overrides fall back to defaults', () => {
@@ -102,7 +97,7 @@ describe('getJevCategoryCells() — effective values', () => {
     });
     const cells = global.__LI.getJevCategoryCells();
     expect(cells.relevant).toBe('ONLY senior React roles');
-    expect(cells.excluded).toMatch(/not interested|not fit/i);
+    expect(cells.excluded).toBe('');
   });
 
   test('extra keys in cfg.jevCategoryText (e.g. unsure) are ignored', () => {
@@ -163,7 +158,7 @@ describe('setJevCategoryText() — editable values only', () => {
     const ret = global.__LI.setJevCategoryText('relevant', '   ');
     expect(ret).toBe(true);
     expect(global.__LI.getCfg().jevCategoryText.relevant).toBeFalsy();
-    expect(global.__LI.getJevCategoryCells().relevant).toMatch(/hiring|job|role/i);
+    expect(global.__LI.getJevCategoryCells().relevant).toBe('');
   });
 });
 
@@ -232,10 +227,13 @@ describe('getEffectiveJevPrompt() — built from cells', () => {
     expect(p).toContain(FIXED_TIE_BREAK);
   });
 
-  test('uses the static defaults on the fixed skeleton', () => {
+  test('keeps the fixed skeleton even when cells are empty', () => {
     const p = global.__LI.getEffectiveJevPrompt();
     expect(p.startsWith(FIXED_FIRST_LINE)).toBe(true);
-    expect(p).toMatch(/hiring|role/i);
+    expect(p).toContain(FIXED_TIE_BREAK);
+    expect((p.match(/- relevant:/g) || []).length).toBe(1);
+    expect((p.match(/- excluded:/g) || []).length).toBe(1);
+    expect((p.match(/- other:/g) || []).length).toBe(1);
   });
 
   test('buildJevPrompt() compat wrapper equals the cells build', () => {
@@ -305,7 +303,12 @@ describe('legacy migration on load', () => {
     let loadCb = null;
     global.chrome.storage.sync.get.mockImplementationOnce((defaults, cb) => {
       loadCb = cb;
-      cb(Object.assign({}, defaults, { jevPrompt: 'Legacy single-textarea text', jevCategoryText: {} }));
+      cb(Object.assign({}, defaults, {
+        jevPrompt: '',
+        includeKeywords: ['react'],
+        excludeKeywords: ['intern'],
+        jevCategoryText: {},
+      }));
     });
     const setMock = global.chrome.storage.sync.set;
     setMock.mockClear();
@@ -314,9 +317,8 @@ describe('legacy migration on load', () => {
       delete require.cache[require.resolve('../content.js')];
       jest.isolateModules(() => { require('../content.js'); });
       const cfg = global.__LI_AC_TEST__.getCfg();
-      expect(cfg.jevCategoryText.relevant).toMatch(/Legacy single-textarea text/);
-      expect(cfg.jevPrompt).toBe('');
-      expect(setMock).toHaveBeenCalledWith(expect.objectContaining({ jevPrompt: '' }));
+      expect(cfg.jevCategoryText.relevant).toMatch(/react/i);
+      expect(cfg.jevCategoryText.excluded).toMatch(/intern/i);
     } finally {
       global.chrome.storage.sync.get = original;
       // restore the canonical test surface for later suites
@@ -324,5 +326,37 @@ describe('legacy migration on load', () => {
       jest.isolateModules(() => { require('../content.js'); });
       global.__LI = globalThis.__LI_AC_TEST__;
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Whole-prompt blobs are split into cells (old single-textarea installs)
+// ---------------------------------------------------------------------------
+describe('parseJevPromptIntoCells() — repair pasted blobs', () => {
+  const BLOB = [
+    'Classify the quoted LinkedIn post into exactly one category.',
+    '',
+    '- relevant: Someone OFFERING a frontend role in my cities.',
+    '- excluded: Job seekers, juniors, non-frontend stacks.',
+    '- other: Anything else. When unsure, choose excluded.',
+  ].join('\n');
+
+  test('detects a full prompt blob', () => {
+    expect(global.__LI.looksLikeFullPrompt(BLOB)).toBe(true);
+    expect(global.__LI.looksLikeFullPrompt('just a relevant sentence')).toBe(false);
+  });
+
+  test('splits the blob into the three cells with no skeleton text left', () => {
+    const cells = global.__LI.parseJevPromptIntoCells(BLOB);
+    expect(cells.relevant).toBe('Someone OFFERING a frontend role in my cities.');
+    expect(cells.excluded).toBe('Job seekers, juniors, non-frontend stacks.');
+    expect(cells.other).toBe('Anything else.');
+    expect(cells.relevant).not.toMatch(/Classify the quoted/i);
+    expect(cells.relevant).not.toMatch(/- excluded:/i);
+  });
+
+  test('a single-line value is not treated as a blob', () => {
+    const cells = global.__LI.getJevCategoryCells();
+    expect(global.__LI.looksLikeFullPrompt(cells.relevant)).toBe(false);
   });
 });

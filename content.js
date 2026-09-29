@@ -1960,7 +1960,7 @@
               const meta = { relevant: { label: 'relevant', color: C.ok }, excluded: { label: 'excluded', color: BW.muted }, other: { label: 'other', color: BW.muted } };
               return JEV_FIXED_KEYS.map(function (k) {
                 return '<label style="display:block;font-size:11px;font-weight:700;color:' + meta[k].color + ';margin:6px 0 2px;">' + meta[k].label + '</label>' +
-                  '<textarea id="li-ac-jev-cell-' + k + '" rows="2" style="width:100%;padding:6px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;resize:vertical;">' + escHtml(cells[k]) + '</textarea>';
+                  '<textarea id="li-ac-jev-cell-' + k + '" rows="2" placeholder="' + escHtml(JEV_CATEGORY_PLACEHOLDERS[k]) + '" style="width:100%;padding:6px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;resize:vertical;">' + escHtml(cells[k]) + '</textarea>';
               }).join('');
             })() +
             '<div style="font-size:11px;color:' + BW.muted + ';margin-bottom:3px;">Prompt preview (read-only)</div>' +
@@ -2112,7 +2112,7 @@
         cfg.jevCategoryText = {};
         chrome.storage.sync.set({ jevCategoryText: {} });
         syncCategoryCellsFromCfg();
-        markJevPromptSaved('✓ cleared — defaults');
+        markJevPromptSaved('✓ cleared');
         scanFeed();
       });
       renderJevPreview();
@@ -2484,12 +2484,18 @@
   const JEV_PROMPT_FIRST_LINE = 'Classify the quoted post into exactly one category.';
   const JEV_PROMPT_TIE_BREAK = 'When unsure between relevant and excluded, choose excluded.';
 
+  // Shown only as input placeholders — never sent, never stored, and never
+  // shipped as a default (users start empty and fill in their own criteria).
+  const JEV_CATEGORY_PLACEHOLDERS = {
+    relevant: 'e.g. Hiring posts for React/frontend roles, ~4-7 yrs, my cities, day shift',
+    excluded: 'e.g. junior/fresher/intern, 8+ yrs, Java/.NET/iOS, walk-ins, open-to-work posts',
+    other: 'Anything else',
+  };
+
+  // Cells start EMPTY: the first run seeds them from the user's own keyword
+  // lists (load-time seed below), so no wording is imposed on anyone.
   function buildJevCategoryText() {
-    return {
-      relevant: 'Hiring posts for roles that match my target (edit this to describe exactly what you want)',
-      excluded: 'Posts I am not interested in, or roles that do not fit my target (edit this)',
-      other: 'Anything else that fits neither category above',
-    };
+    return { relevant: '', excluded: '', other: '' };
   }
 
   // One-time seed for existing installs: turn the old keyword lists into a
@@ -2502,6 +2508,27 @@
     if (inc.length) out.relevant = 'Hiring/job posts about: ' + inc.join(', ');
     if (exc.length) out.excluded = 'Posts about (not interested): ' + exc.join(', ');
     return out;
+  }
+
+  // Some installs still carry a whole-prompt blob in one cell (it used to be a
+  // single free-text textarea, and the legacy migration put it in `relevant`).
+  // Detect that shape and split it into the three cells.
+  function looksLikeFullPrompt(text) {
+    const t = String(text || '');
+    return /-\s*relevant:/i.test(t) && /-\s*excluded:/i.test(t) && /-\s*other:/i.test(t);
+  }
+  function parseJevPromptIntoCells(text) {
+    const t = String(text || '');
+    const grab = key => {
+      const re = new RegExp('-\\s*' + key + ':\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:relevant|excluded|other):|$)', 'i');
+      const m = t.match(re);
+      return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+    };
+    const clean = v => String(v || '')
+      .replace(/\s*When unsure[^.]*\.?\s*$/i, '')
+      .replace(/^\s*(?:Classify|Classify ONLY)[^.]*\.\s*/i, '')
+      .trim();
+    return { relevant: clean(grab('relevant')), excluded: clean(grab('excluded')), other: clean(grab('other')) };
   }
 
   // Effective values: user override when non-blank, else the static default.
@@ -3634,6 +3661,22 @@
       if (!cfg.jevCategoryText || typeof cfg.jevCategoryText !== 'object' || Array.isArray(cfg.jevCategoryText)) cfg.jevCategoryText = {};
       // One-time migration: an old single-textarea prompt becomes the
       // `relevant` value, then the legacy field is cleared.
+      // Repair: a whole prompt pasted into one cell (old single-textarea
+      // installs) is split into the three category cells.
+      try {
+        const blob = ['relevant', 'excluded', 'other']
+          .map(k => (cfg.jevCategoryText && cfg.jevCategoryText[k]) || '')
+          .find(looksLikeFullPrompt);
+        if (blob) {
+          const split = parseJevPromptIntoCells(blob);
+          cfg.jevCategoryText = {
+            relevant: split.relevant || cfg.jevCategoryText.relevant || '',
+            excluded: split.excluded || cfg.jevCategoryText.excluded || '',
+            other: split.other || cfg.jevCategoryText.other || '',
+          };
+          try { chrome.storage.sync.set({ jevCategoryText: cfg.jevCategoryText }); } catch (_) {}
+        }
+      } catch (_) {}
       // One-time seed: previous keyword lists become the category text draft.
       try {
         if (!cfg.jevCategoryText.relevant || !cfg.jevCategoryText.excluded) {
@@ -3874,7 +3917,7 @@
     JEV_FIXED_KEYS, JEV_PROMPT_FIRST_LINE, JEV_PROMPT_TIE_BREAK,
     jevUnseenPosts, jevClassifyPosts, llmClassifyPosts, jevReset, applyJevChip, markJevPending, JEV_PENDING_CLS, updateJevStatus,
     setJevApiKey, getJevApiKey, setLlmKey, getLlmKey, migrateLegacyLlmKeys,
-    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, seedCategoryTextFromKeywords, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
+    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, seedCategoryTextFromKeywords, parseJevPromptIntoCells, looksLikeFullPrompt, JEV_CATEGORY_PLACEHOLDERS, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,

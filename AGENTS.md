@@ -144,10 +144,12 @@ dashboard work needed. Steps:
   Retry, live cost line. Categories use a FIXED skeleton (fixed first line,
   fixed key order relevant/excluded/other, fixed tie-break) with editable
   VALUES only: `cfg.jevCategoryText = {relevant,excluded,other}` built by
-  `buildJevCategoryText` (static defaults) / `getJevCategoryCells` /
-  `buildJevPromptFromCells`; blank cell = static default, `setJevCategoryText`
-  rejects unknown keys, legacy `jevPrompt` migrates into `relevant`, and
-  `seedCategoryTextFromKeywords` seeds cells once from existing keyword lists.
+  `buildJevCategoryText` (EMPTY defaults) / `getJevCategoryCells` /
+  `buildJevPromptFromCells`; cells start EMPTY (placeholders are UI-only),
+  `setJevCategoryText` rejects unknown keys, a pasted whole-prompt blob is
+  split by `parseJevPromptIntoCells`, legacy `jevPrompt` migrates into
+  `relevant`, and `seedCategoryTextFromKeywords` seeds cells once from the
+  user's own keyword lists.
   Panel shows one cell per key + a read-only prompt preview; ↺ clears
   overrides. Keywords are now an Advanced/manual-mode input only — they no
   longer shape the AI prompt. Panel groups are collapsible `<details>` with chevrons from

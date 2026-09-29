@@ -111,6 +111,21 @@ describe('jev panel wiring', () => {
     expect(cats[0].action).toBe('expand');
   });
 
+  test('criteria is a resizable multi-line textarea that auto-grows', async () => {
+    await openPanel();
+    const ta = q('[data-cat-criteria="relevant"]');
+    expect(ta.tagName).toBe('TEXTAREA');
+    expect(ta.getAttribute('rows')).toBe('2');
+    expect(ta.style.resize).toBe('vertical');
+    // auto-grow on input (jsdom scrollHeight is 0, but the handler must run without throwing)
+    ta.value = 'line one that is fairly long so it would wrap in a narrow panel';
+    expect(() => ta.dispatchEvent(new Event('input', { bubbles: true }))).not.toThrow();
+    // and it still saves as a category value
+    ta.value = 'wrapped criteria text';
+    ta.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(global.__LI.getJevCategories()[0].criteria).toBe('wrapped criteria text');
+  });
+
   test('storage changes re-render the editor', async () => {
     await openPanel();
     global.__onChanged({ jevCategories: { newValue: [{ id: 'z', label: 'zed', criteria: 'zz', action: 'collapse' }] } }, 'sync');

@@ -167,12 +167,12 @@ describe('increased heights 32vh — detailed invariants', () => {
     await jest.advanceTimersByTimeAsync(400);
   }
 
-  test('control panel max-height is 78vh, found panel narrow 90vh / wide 85vh', async () => {
+  test('control panel max-height is 82vh, found panel narrow 90vh / wide 85vh', async () => {
     makePost('hello bob@example.com');
     await scan();
     const panel = document.getElementById('li-ac-panel');
     const found = document.getElementById('li-ac-found-panel');
-    expect(panel.style.maxHeight).toBe('78vh');
+    expect(panel.style.maxHeight).toBe('82vh');
     // default narrow (jsdom width 1024)
     expect(found.style.maxHeight).toBe('90vh');
     // wide

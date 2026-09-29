@@ -328,7 +328,10 @@
       // Panel focus visibility (dark background needs an explicit ring).
       '#li-ac-panel button:focus-visible, #li-ac-panel input:focus-visible, #li-ac-panel select:focus-visible, #li-ac-panel textarea:focus-visible, #li-ac-panel summary:focus-visible, #li-ac-found-panel button:focus-visible { outline: 2px solid ' + C.focus + ' !important; outline-offset: 1px; }' +
       // Touch targets: keep small controls at >=24px tall.
-      '#li-ac-panel button, #li-ac-found-panel button { min-height: 24px; }' +
+      '#li-ac-panel button, #li-ac-found-panel button { min-height: 26px; }' +
+      '#li-ac-panel textarea { resize: vertical; }' +
+      '#li-ac-jev-cat-editor textarea { resize: vertical; }' +
+      '#li-ac-jev-cat-editor input, #li-ac-jev-cat-editor select, #li-ac-jev-cat-editor textarea { font-family: inherit; }' +
       // Jobs page: left list should have no left borders/outlines (user request)
       'body.jobs-page ' + '.' + VIEWED_CLS + ' { box-shadow: none !important; }' +
       'body.jobs-page ' + '.' + HL_CLS + ' { outline: none !important; box-shadow: none !important; }' +
@@ -1916,7 +1919,7 @@
       if (stalePanel) stalePanel.remove();
       panel = document.createElement('div');
       panel.id = 'li-ac-panel';
-      panel.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:320px;max-height:78vh;overflow:auto;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
+      panel.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999999;width:360px;max-height:82vh;overflow:auto;background:' + BW.bg + ';color:' + BW.fg + ';border:1px solid ' + BW.border + ';border-radius:8px;font:15px/1.55 sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.6);';
       panel.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔗 Job Radar</span><button id="li-ac-panel-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button></div>' +
         '<div id="li-ac-panel-body">' +
@@ -2122,21 +2125,29 @@
         const cats = getJevCategories();
         host.innerHTML = cats.map((c, i) => {
           const expand = c.action === 'expand';
-          return '<div data-cat-row="' + escHtml(c.id) + '" style="border:1px solid ' + BW.border + ';border-radius:6px;padding:6px 7px;margin-bottom:5px;background:' + (expand ? 'rgba(34,197,94,.10)' : 'rgba(187,187,187,.08)') + ';">' +
+          return '<div data-cat-row="' + escHtml(c.id) + '" style="border:1px solid ' + BW.border + ';border-radius:6px;padding:6px 7px;margin-bottom:6px;background:' + (expand ? 'rgba(34,197,94,.10)' : 'rgba(187,187,187,.08)') + ';">' +
             '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">' +
-              '<span style="font-size:11px;color:' + BW.muted + ';">' + (i + 1) + '.</span>' +
-              '<input data-cat-label="' + escHtml(c.id) + '" value="' + escHtml(c.label) + '" title="Category name (shown on posts)" style="flex:1;min-width:0;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;">' +
-              '<select data-cat-action="' + escHtml(c.id) + '" title="What to do with posts in this category" style="padding:4px 5px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:11px;">' +
+              '<span style="font-size:11px;color:' + BW.muted + ';flex:none;">' + (i + 1) + '.</span>' +
+              '<input data-cat-label="' + escHtml(c.id) + '" value="' + escHtml(c.label) + '" title="Category name (shown on posts)" style="flex:1 1 auto;min-width:0;padding:5px 7px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;">' +
+              '<select data-cat-action="' + escHtml(c.id) + '" title="What to do with posts in this category" style="flex:none;padding:5px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:11px;">' +
                 '<option value="expand"' + (expand ? ' selected' : '') + '>Expand</option>' +
                 '<option value="collapse"' + (expand ? '' : ' selected') + '>Collapse</option>' +
               '</select>' +
-              '<button data-cat-up="' + escHtml(c.id) + '" title="Move up" style="padding:2px 6px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;cursor:pointer;">↑</button>' +
-              '<button data-cat-down="' + escHtml(c.id) + '" title="Move down" style="padding:2px 6px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;cursor:pointer;">↓</button>' +
-              '<button data-cat-remove="' + escHtml(c.id) + '" title="Remove this category" style="padding:2px 7px;background:' + C.danger + ';color:#450a0a;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">×</button>' +
             '</div>' +
-            '<input data-cat-criteria="' + escHtml(c.id) + '" value="' + escHtml(c.criteria) + '" placeholder="What matches this? e.g. Java-heavy posts, 8+ yrs, walk-ins" title="What the AI should match for this category" style="width:100%;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;">' +
+            '<textarea data-cat-criteria="' + escHtml(c.id) + '" rows="2" wrap="soft" placeholder="What matches this? e.g. Java-heavy posts, 8+ yrs, walk-ins (drag the corner to make it taller)" title="What the AI should match for this category — drag the bottom-right corner to resize" style="width:100%;box-sizing:border-box;min-height:38px;max-height:40vh;padding:5px 7px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;line-height:1.35;resize:vertical;">' + escHtml(c.criteria) + '</textarea>' +
+            '<div style="display:flex;justify-content:flex-end;gap:5px;margin-top:4px;">' +
+              '<button data-cat-up="' + escHtml(c.id) + '" title="Move up" style="padding:3px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;cursor:pointer;">↑</button>' +
+              '<button data-cat-down="' + escHtml(c.id) + '" title="Move down" style="padding:3px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;cursor:pointer;">↓</button>' +
+              '<button data-cat-remove="' + escHtml(c.id) + '" title="Remove this category" style="padding:3px 9px;background:' + C.danger + ';color:#450a0a;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Remove</button>' +
+            '</div>' +
           '</div>';
         }).join('');
+        // Auto-grow the criteria boxes to fit their content (manual resize still works).
+        host.querySelectorAll('textarea[data-cat-criteria]').forEach(t => {
+          const grow = () => { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, Math.round((window.innerHeight || 800) * 0.4)) + 'px'; };
+          grow();
+          t.addEventListener('input', grow);
+        });
       }
       function commitCategories(list, note) {
         setJevCategories(list);

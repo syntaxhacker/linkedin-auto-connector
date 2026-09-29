@@ -579,6 +579,30 @@ describe('llm guardrails', () => {
     }
   });
 
+  test('cost line reports today usage as well as the session', async () => {
+    closePanels();
+    document.body.innerHTML = '';
+    jest.useFakeTimers();
+    global.__LI.setCfg({ jevMode: true });
+    const rel = makePost('Senior React role with body text here');
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true, json: () => Promise.resolve({ answers: { c0: { choice: 'relevant', confidence: 0.9, probabilities: {} } } }),
+    }));
+    try {
+      sendMessage({ type: 'FEED_SCAN' });
+      await jest.advanceTimersByTimeAsync(500);
+      await Promise.resolve();
+      const cost = document.getElementById('li-ac-llm-cost');
+      expect(cost.textContent).toMatch(/Est\./);
+      expect(cost.textContent).toMatch(/today 1/);
+    } finally {
+      global.fetch = realFetch;
+      jest.useRealTimers();
+      global.__LI.setCfg({ jevMode: false });
+      closePanels();
+    }
+  });
+
   test('empty input returns ok without fetch', async () => {
     global.fetch = okFetch('relevant', 0.9);
     const res = await global.__LI.llmClassifyPosts([]);

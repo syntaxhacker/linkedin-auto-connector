@@ -56,6 +56,11 @@ describe('jev categories — user-owned model', () => {
     expect(global.__LI.getJevCategories().map(c => c.id)).toEqual(['relevant', 'unsure-ish']);
   });
 
+  test('labels drop colons and newlines (bullet stays unambiguous)', () => {
+    const norm = global.__LI.normalizeJevCategories([{ id: 'x', label: 'java: senior\nengineer', criteria: '', action: 'expand' }]);
+    expect(norm[0].label).toBe('java senior engineer');
+  });
+
   test('unknown ids are no-ops; last bucket cannot be removed', () => {
     expect(global.__LI.updateJevCategory('nope', { label: 'x' })).toBe(false);
     expect(global.__LI.removeJevCategory('nope')).toBe(false);

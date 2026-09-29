@@ -85,6 +85,8 @@ dashboard work needed. Steps:
 
 - **Colors**: `palette.js` (`LI_PALETTE`) — content.js reads it; popup.html
   mirrors it as CSS vars. Keep in sync manually.
+- **CI**: `.github/workflows/ci.yml` runs `npm test` + `npx playwright test`
+  (chromium) on push/PR.
 - **Config**: `cfg` from `chrome.storage.sync`, defaulted in
   `chrome.storage.sync.get(...)` (content.js:3486) and at `let cfg = {...}`
   (content.js:39). Keys: `autoExpand, scanEmails, includeKeywords,

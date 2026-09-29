@@ -36,7 +36,7 @@
   };
 
   // === Feed scanner config ===
-  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategories: null, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 };
+  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, highlightKeywords: [], jevMode: true, jevPrompt: '', jevCategories: null, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 };
   // LLM API keys are secrets: in-memory map + chrome.storage.local only, never synced.
   // Legacy single-key installs migrate via migrateLegacyLlmKeys().
   let llmKeys = {};
@@ -1993,7 +1993,7 @@
             '<div id="li-ac-jev-cat-editor"></div>' +
             '<div style="display:flex;gap:6px;margin:4px 0 6px;">' +
               '<button id="li-ac-jev-cat-add" title="Add a category" style="padding:3px 9px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">+ Add category</button>' +
-              '<span id="li-ac-jev-cat-hint" style="font-size:10px;color:' + BW.muted + ';align-self:center;">Expand = keep the post open · Collapse = thin strip</span>' +
+              '<span id="li-ac-jev-cat-hint" style="font-size:10px;color:' + BW.muted + ';align-self:center;">Expand = keep the post open · Collapse = thin strip (hover a strip to peek)</span>' +
             '</div>' +
             '<div style="font-size:11px;color:' + BW.muted + ';margin-bottom:3px;">Prompt preview (read-only)</div>' +
             '<pre id="li-ac-jev-prompt-preview" style="white-space:pre-wrap;word-break:break-word;max-height:110px;overflow:auto;margin:0;padding:6px 8px;border:1px dashed ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.muted + ';font-size:11px;"></pre>' +
@@ -2129,7 +2129,7 @@
             '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">' +
               '<span style="font-size:11px;color:' + BW.muted + ';flex:none;">' + (i + 1) + '.</span>' +
               '<input data-cat-label="' + escHtml(c.id) + '" value="' + escHtml(c.label) + '" title="Category name (shown on posts)" style="flex:1 1 auto;min-width:0;padding:5px 7px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;">' +
-              '<select data-cat-action="' + escHtml(c.id) + '" title="What to do with posts in this category" style="flex:none;padding:5px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:11px;">' +
+              '<select data-cat-action="' + escHtml(c.id) + '" title="Expand keeps these posts open; Collapse shrinks them to a one-line strip (hover to peek)" style="flex:none;padding:5px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:11px;">' +
                 '<option value="expand"' + (expand ? ' selected' : '') + '>Expand</option>' +
                 '<option value="collapse"' + (expand ? '' : ' selected') + '>Collapse</option>' +
               '</select>' +
@@ -2581,7 +2581,11 @@
     return ((prefix || 'cat') + '-' + Date.now().toString(36) + '-' + JEV_CAT_SEQ).toLowerCase();
   }
   function normJevLabel(s, fallback) {
-    const v = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    const v = String(s == null ? '' : s)
+      .replace(/[\r\n]+/g, ' ')
+      .replace(/:/g, '') // a colon would make the "- label: criteria" bullet ambiguous
+      .replace(/\s+/g, ' ')
+      .trim();
     return v.slice(0, 40) || fallback;
   }
   // Sanitize any stored list: unique ids, valid actions, single-line strings.
@@ -3014,8 +3018,8 @@
       const key = postKey(p);
       if (!key) return;
       const existing = jevRelevantStore.get(key);
-      if (existing) { existing.el = p; return; }
-      jevRelevantStore.set(key, { el: p, key, keywords: ['relevant'], emails: [] });
+      if (existing) { existing.el = p; existing.keywords = [bucket.label]; return; }
+      jevRelevantStore.set(key, { el: p, key, keywords: [bucket.label], emails: [] });
       if (jevRelevantStore.size > JEV_RELEVANT_CAP) {
         const oldest = jevRelevantStore.keys().next().value;
         jevRelevantStore.delete(oldest);
@@ -3185,8 +3189,10 @@
     const el = document.getElementById('li-ac-llm-cost');
     if (!el) return;
     const s = getLlmStats();
+    rollLlmDaily();
     el.textContent = 'Est. ' + formatCost(s.estimatedCost) + ' this session · ' +
-      s.sessionReq + ' req · ' + s.sessionPosts + ' posts · ' + getProvider(cfg.llmProviderId).label;
+      s.sessionReq + ' req · ' + s.sessionPosts + ' posts · today ' + llmDaily.posts + ' · ' +
+      getProvider(cfg.llmProviderId).label;
     el.style.display = cfg.jevMode ? '' : 'none';
     if (typeof panel !== 'undefined') updatePanelSummaries(panel);
   }
@@ -3839,7 +3845,7 @@
 
   // === Load config + init ===
   chrome.storage.sync.get(
-    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategories: null, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 },
+    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, highlightKeywords: [], jevMode: true, jevPrompt: '', jevCategories: null, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 },
     opts => {
       // Ensure highlight defaults if missing (old installs)
       if (opts.highlightInline === undefined) opts.highlightInline = true;

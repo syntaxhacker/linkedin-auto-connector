@@ -91,7 +91,7 @@ dashboard work needed. Steps:
   excludeKeywords, autoScroll, ultraHide, debug, kwSectionCollapsed,
   autoScrollDurationMin, panelMinimized, foundPanelMinimized,
   highlightInline, highlightKeywords, jevMode, jevPrompt, jevCategoryText, jevFollowKeywords,
-  jevMinConfidence, llmProviderId, llmEndpoints, llmModels,
+  jevMinConfidence, showAdvancedTools, llmProviderId, llmEndpoints, llmModels,
   llmDailyCapPosts, llmPerMinReq, llmMinRunGapMs` (plus per-provider API keys
   in `chrome.storage.local` only — never synced, never logged, never rendered
   back into the panel DOM).

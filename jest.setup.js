@@ -64,6 +64,7 @@ const STORAGE_DEFAULTS = {
   jevPrompt: '',
   jevCategoryText: {},
   jevFollowKeywords: false,
+  showAdvancedTools: false,
   jevMinConfidence: 0.7,
   llmProviderId: 'jev',
   llmEndpoints: {},

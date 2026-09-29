@@ -36,7 +36,7 @@
   };
 
   // === Feed scanner config ===
-  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategoryText: {}, jevFollowKeywords: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 };
+  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategoryText: {}, jevFollowKeywords: false, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 };
   // LLM API keys are secrets: in-memory map + chrome.storage.local only, never synced.
   // Legacy single-key installs migrate via migrateLegacyLlmKeys().
   let llmKeys = {};
@@ -1661,6 +1661,18 @@
     set('li-ac-grp-jev', !!cfg.jevMode);
   }
 
+  // Manual-only groups are hidden unless the user opts into "Advanced".
+  // AI mode never uses them (it has its own concealment), so they are noise.
+  function applyAdvancedVisibility(panelEl) {
+    const p = panelEl || panel;
+    if (!p) return;
+    const show = !!cfg.showAdvancedTools;
+    ['li-ac-grp-feed', 'li-ac-grp-hl'].forEach(id => {
+      const g = p.querySelector('#' + id);
+      if (g) g.style.display = show ? '' : 'none';
+    });
+  }
+
   // One-line summaries so a collapsed group still communicates its state.
   function updatePanelSummaries(panelEl) {
     if (!panelEl) return;
@@ -1991,6 +2003,10 @@
             '<div style="font-size:10px;color:' + BW.muted + ';margin-top:4px;">Unseen post text is sent to the active provider for classification. See PRIVACY.md.</div>' +
           '</div>' +
           '</details>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:12px;color:' + BW.muted + ';cursor:pointer;border-top:1px solid ' + BW.border + ';" title="Show the manual keyword/highlight/focus tools (unused while AI categorize is on)">' +
+            '<input type="checkbox" id="li-ac-adv-tools" style="accent-color:' + C.info + ';width:14px;height:14px;"' + (cfg.showAdvancedTools ? ' checked' : '') + '>' +
+            '<span>⚙ Advanced: manual tools</span>' +
+          '</label>' +
           '</div>';
       document.body.appendChild(panel);
       const toggle = panel.querySelector('#li-ac-autoscroll');
@@ -2164,6 +2180,13 @@
         scanFeed();
       });
       renderJevPreview();
+      const advBox = panel.querySelector('#li-ac-adv-tools');
+      if (advBox) advBox.addEventListener('change', () => {
+        cfg.showAdvancedTools = advBox.checked;
+        chrome.storage.sync.set({ showAdvancedTools: cfg.showAdvancedTools });
+        applyAdvancedVisibility(panel);
+        applyGroupDefaults(panel);
+      });
       const jevRetry = panel.querySelector('#li-ac-jev-retry');
       if (jevRetry) jevRetry.addEventListener('click', () => {
         clearLlmKill();
@@ -2245,6 +2268,7 @@
       updateJevConcealedButton();
       applyKwSection(panel);
       applyGroupDefaults(panel);
+      applyAdvancedVisibility(panel);
       applyPanelMinimized(panel);
       renderHighlightTags(panel);
       updatePanelSummaries(panel);
@@ -3657,7 +3681,7 @@
 
   // === Load config + init ===
   chrome.storage.sync.get(
-    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategoryText: {}, jevFollowKeywords: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 },
+    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategoryText: {}, jevFollowKeywords: false, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 },
     opts => {
       // Ensure highlight defaults if missing (old installs)
       if (opts.highlightInline === undefined) opts.highlightInline = true;
@@ -3762,7 +3786,7 @@
 
   onChangedListener = (changes, area) => {
     if (area !== 'sync') return;
-    ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin', 'highlightInline', 'highlightKeywords', 'jevMode', 'jevPrompt', 'jevCategoryText', 'jevFollowKeywords', 'jevMinConfidence', 'llmProviderId', 'llmEndpoints', 'llmModels', 'llmDailyCapPosts', 'llmPerMinReq', 'llmMinRunGapMs'].forEach(k => {
+    ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin', 'highlightInline', 'highlightKeywords', 'jevMode', 'jevPrompt', 'jevCategoryText', 'jevFollowKeywords', 'showAdvancedTools', 'jevMinConfidence', 'llmProviderId', 'llmEndpoints', 'llmModels', 'llmDailyCapPosts', 'llmPerMinReq', 'llmMinRunGapMs'].forEach(k => {
       // H3: a removed key reports {oldValue} with no newValue — don't write
       // undefined, which would crash .length/.forEach callers later.
       if (changes[k] && changes[k].newValue !== undefined) cfg[k] = changes[k].newValue;
@@ -3841,6 +3865,14 @@
         if (mc) mc.value = Math.min(1, Math.max(0, Number(cfg.jevMinConfidence) || 0));
       }
     }
+    if (changes.showAdvancedTools) {
+      if (panel) {
+        const ab = panel.querySelector('#li-ac-adv-tools');
+        if (ab) ab.checked = !!cfg.showAdvancedTools;
+        applyAdvancedVisibility(panel);
+        applyGroupDefaults(panel);
+      }
+    }
     if (changes.jevCategoryText) {
       if (!cfg.jevCategoryText || typeof cfg.jevCategoryText !== 'object' || Array.isArray(cfg.jevCategoryText)) cfg.jevCategoryText = {};
       if (panel) syncJevCategoryCellDefaults(panel);
@@ -3863,7 +3895,7 @@
     }
     // L4: only re-scan when a field that affects scanning actually changed,
     // otherwise an unrelated storage write (e.g. debug) needlessly re-scans.
-    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails', 'highlightInline', 'highlightKeywords', 'jevMode', 'jevPrompt', 'jevCategoryText', 'jevFollowKeywords', 'jevMinConfidence', 'llmProviderId', 'llmEndpoints', 'llmModels', 'llmDailyCapPosts', 'llmPerMinReq'];
+    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails', 'highlightInline', 'highlightKeywords', 'jevMode', 'jevPrompt', 'jevCategoryText', 'jevFollowKeywords', 'showAdvancedTools', 'jevMinConfidence', 'llmProviderId', 'llmEndpoints', 'llmModels', 'llmDailyCapPosts', 'llmPerMinReq'];
     if (scanKeys.some(k => changes[k])) scanFeed();
   };
   chrome.storage.onChanged.addListener(onChangedListener);
@@ -3898,7 +3930,7 @@
     JEV_FIXED_KEYS, JEV_PROMPT_FIRST_LINE, JEV_PROMPT_TIE_BREAK,
     jevUnseenPosts, jevClassifyPosts, llmClassifyPosts, jevReset, applyJevChip, markJevPending, JEV_PENDING_CLS, updateJevStatus,
     setJevApiKey, getJevApiKey, setLlmKey, getLlmKey, migrateLegacyLlmKeys,
-    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
+    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,

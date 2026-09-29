@@ -504,6 +504,27 @@ describe('collapsible keywords section', () => {
     expect(panel.querySelector('#li-ac-grp-kw').open).toBe(false);
   });
 
+  test('manual-only groups are hidden unless Advanced is on', async () => {
+    await openPanel();
+    expect(panel.querySelector('#li-ac-grp-feed').style.display).toBe('none');
+    expect(panel.querySelector('#li-ac-grp-hl').style.display).toBe('none');
+    // AI group + keywords stay reachable (keywords feed AI category defaults)
+    expect(panel.querySelector('#li-ac-grp-jev')).not.toBeNull();
+    expect(panel.querySelector('#li-ac-grp-kw')).not.toBeNull();
+  });
+
+  test('Advanced checkbox reveals the manual groups and persists', async () => {
+    await openPanel();
+    const adv = panel.querySelector('#li-ac-adv-tools');
+    expect(adv).not.toBeNull();
+    adv.checked = true;
+    adv.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(global.__LI.getCfg().showAdvancedTools).toBe(true);
+    expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ showAdvancedTools: true });
+    expect(panel.querySelector('#li-ac-grp-feed').style.display).toBe('');
+    expect(panel.querySelector('#li-ac-grp-hl').style.display).toBe('');
+  });
+
   test('groups are collapsible (panel stays short)', async () => {
     await openPanel();
     ['li-ac-grp-feed', 'li-ac-grp-kw', 'li-ac-grp-hl', 'li-ac-grp-jev'].forEach(id => {

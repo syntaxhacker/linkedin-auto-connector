@@ -90,7 +90,7 @@ dashboard work needed. Steps:
   (content.js:39). Keys: `autoExpand, scanEmails, includeKeywords,
   excludeKeywords, autoScroll, ultraHide, debug, kwSectionCollapsed,
   autoScrollDurationMin, panelMinimized, foundPanelMinimized,
-  highlightInline, highlightKeywords, jevMode, jevPrompt, jevFollowKeywords,
+  highlightInline, highlightKeywords, jevMode, jevPrompt, jevCategoryText, jevFollowKeywords,
   jevMinConfidence, llmProviderId, llmEndpoints, llmModels,
   llmDailyCapPosts, llmPerMinReq, llmMinRunGapMs` (plus per-provider API keys
   in `chrome.storage.local` only — never synced, never logged, never rendered
@@ -141,12 +141,15 @@ dashboard work needed. Steps:
   caps/throttle implemented + counted but not enforced; kill-switch on):
   in-flight guard, 30s timeout, 20/batch, 200/session, 500/day
   (`llmDailyCapPosts`), 20/min throttle, 401/double-429 kill-switch with panel
-  Retry, live cost line. Prompt textarea is fully manual (empty = silent
-  auto-build from keywords at scan time); Autofill fills+saves on demand,
-  ↺ clears to auto mode, every save shows ✓ feedback next to the label.
-  Opt-in `jevFollowKeywords` checkbox reuses include/exclude to keep the
-  prompt synced (auto-disables when custom text is typed; skips focused
-  drafts). Keys live in
+  Retry, live cost line. Categories use a FIXED skeleton (fixed first line,
+  fixed key order relevant/excluded/other, fixed tie-break) with editable
+  VALUES only: `cfg.jevCategoryText = {relevant,excluded,other}` built by
+  `buildJevCategoryText`/`getJevCategoryCells`/`buildJevPromptFromCells`;
+  blank cell = keyword-derived default, `setJevCategoryText` rejects unknown
+  keys, legacy `jevPrompt` migrates into `relevant`. Panel shows one cell per
+  key + a read-only prompt preview; Autofill fills relevant/excluded, ↺ clears
+  overrides, `jevFollowKeywords` keeps relevant/excluded synced (auto-disables
+  on manual edit). Keys live in
   `chrome.storage.local` only; entering Jev mode unhides/uncollapses
   keyword-mode posts, exiting calls `jevReset()`.
 - **Clear seen** → removes viewed rows; green marker stays on those feed posts

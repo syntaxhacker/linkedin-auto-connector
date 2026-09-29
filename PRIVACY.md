@@ -12,9 +12,10 @@ When you enable **Jev mode** and paste an API key:
   characters each, batched up to 20 per request) is POSTed over HTTPS to
   your active provider — by default `https://api.typesafe.ai/v1/systemone`
   (TypeSafe/Jev decisions API), or your own OpenAI-compatible endpoint if
-  you switch providers — along with your category definitions derived from
-  your include/exclude keywords and prompt. No names, profiles, logins, or
-  cookies are sent — only post body text and the classification instructions.
+  you switch providers — along with your category definitions (fixed
+  relevant/excluded/other keys with your editable per-category descriptions).
+  No names, profiles, logins, or cookies are sent — only post body text and
+  the classification instructions.
 - **When**: only while Jev mode is ON, only on LinkedIn feed/search pages,
   and only for posts not yet categorized (each post is sent once per
   session). Requests are performed by the extension's background service

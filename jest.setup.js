@@ -62,6 +62,7 @@ const STORAGE_DEFAULTS = {
   debug: true,
   jevMode: false,
   jevPrompt: '',
+  jevCategoryText: {},
   jevFollowKeywords: false,
   jevMinConfidence: 0.7,
   llmProviderId: 'jev',

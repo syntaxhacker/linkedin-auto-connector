@@ -42,7 +42,7 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await page.screenshot({ path: 'artifacts/jev-mode-chips.png', fullPage: false });
   });
 
-  test('prompt autofill fills from keywords and saves', async ({ page }) => {
+  test('prompt autofill fills relevant/excluded cells and saves', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       posts: [{ text: 'React hiring post with body' }]
@@ -50,10 +50,13 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await fp.setStorage({ includeKeywords: ['react'], excludeKeywords: ['intern'] });
     await fp.feedScan();
 
-    const prompt = page.locator('#li-ac-jev-prompt');
-    await expect(prompt).toHaveValue('');
-    await page.locator('#li-ac-jev-autofill').click();
-    await expect(prompt).toHaveValue(/react/i);
-    await expect(page.locator('#li-ac-jev-saved')).toContainText(/autofilled/i);
+    const relevant = page.locator('#li-ac-jev-cell-relevant');
+    await expect(relevant).toHaveValue(/react/i);
+    await expect(page.locator('#li-ac-jev-prompt-preview')).toContainText('Classify the quoted post into exactly one category.');
+    await expect(page.locator('#li-ac-jev-prompt')).toHaveCount(0); // legacy textarea gone
+    await relevant.fill('Senior fintech React only');
+    await relevant.blur();
+    await expect(page.locator('#li-ac-jev-saved')).toContainText(/saved/i);
+    await expect(page.locator('#li-ac-jev-prompt-preview')).toContainText('Senior fintech React only');
   });
 });

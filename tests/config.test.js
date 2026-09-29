@@ -42,6 +42,8 @@ describe('content.js initialization', () => {
       'getCfg', 'setCfg', 'getCounts', 'cleanup',
       // Jev / LLM surface
       'buildJevCategories', 'buildJevPrompt', 'getEffectiveJevPrompt',
+      'buildJevCategoryText', 'getJevCategoryCells', 'setJevCategoryText',
+      'buildJevPromptFromCells', 'migrateLegacyJevPrompt',
       'buildJevQuestions', 'buildJevItems', 'truncatePostText',
       'jevUnseenPosts', 'jevClassifyPosts', 'llmClassifyPosts', 'jevReset',
       'applyJevChip', 'markJevPending', 'updateJevStatus',

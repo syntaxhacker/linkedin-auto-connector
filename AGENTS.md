@@ -152,7 +152,8 @@ dashboard work needed. Steps:
   user's own keyword lists.
   Panel shows one cell per key + a read-only prompt preview; ↺ clears
   overrides. In AI mode the Found panel becomes a single "✓ Relevant posts"
-  list (renderJevFound/collectJevRelevant) — the manual Keywords/Emails/
+  list (renderJevFound + the persistent jevRelevantStore/jevRelevantHits, so a
+  scan that skips classification cannot blank it) — the manual Keywords/Emails/
   Excluded tabs are hidden there; rows carry data-kind="kw" so the existing
   click-to-scroll + seen marking still work. Keywords are now an
   Advanced/manual-mode input only — they no

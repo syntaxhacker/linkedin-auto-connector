@@ -1524,7 +1524,8 @@
     if (sortBar) sortBar.style.display = 'none'; // feed order, no sort UI
     // Hits are stored in kwPanelData so the existing row-click handler
     // (scroll-to-post + seen marking) works unchanged.
-    const hits = sortedHits('kw');
+    const hits = jevRelevantHits();
+    kwPanelData = hits; // reused by the row-click handler (scroll + seen)
     const countEl = fp.querySelector('#li-ac-kw-count');
     if (countEl) countEl.textContent = String(hits.length);
     if (!hits.length) {
@@ -2438,6 +2439,11 @@
       applyFoundPanelMinimized(foundPanel);
       applySortButtons(foundPanel);
       applyFoundLayout();
+      // AI mode owns the Found panel: hide the manual tabs/sections and show
+      // the relevant list. Doing it here (not only after classification) keeps
+      // it correct on panel recreation and on scans that skip classification
+      // (no key yet, paced, throttled).
+      renderJevFound();
     }
     positionFoundPanel();
 
@@ -2893,16 +2899,43 @@
     return n;
   }
 
-  // Snapshot the currently-visible relevant posts into the Found list shape.
+  // Persistent list of AI-relevant posts (key -> hit). Kept across scans
+  // because renderPanel() clears kwPanelData before classification runs, which
+  // made the list flicker/disappear on any scan that skipped classifying.
+  const JEV_RELEVANT_CAP = 400;
+  const jevRelevantStore = new Map();
   function collectJevRelevant(posts) {
-    const arr = (posts || []).filter(p => p && p.getAttribute && p.getAttribute('data-jev-done') === 'relevant');
-    kwPanelData = arr.map(p => ({
-      el: p,
-      key: postKey(p),
-      keywords: ['relevant'],
-      emails: [],
-    }));
-    arr.forEach(p => ensureMeta('kw', postKey(p)));
+    (posts || []).forEach(p => {
+      if (!p || !p.getAttribute || p.getAttribute('data-jev-done') !== 'relevant') return;
+      const key = postKey(p);
+      if (!key) return;
+      const existing = jevRelevantStore.get(key);
+      if (existing) { existing.el = p; return; }
+      jevRelevantStore.set(key, { el: p, key, keywords: ['relevant'], emails: [] });
+      if (jevRelevantStore.size > JEV_RELEVANT_CAP) {
+        const oldest = jevRelevantStore.keys().next().value;
+        jevRelevantStore.delete(oldest);
+      }
+    });
+  }
+  // Live hits for the panel: store entries whose post is still on the page,
+  // newest first, minus anything the user cleared as seen.
+  function jevRelevantHits() {
+    const out = [];
+    jevRelevantStore.forEach(hit => {
+      if (!hit.el || !hit.el.isConnected) return; // virtualized away
+      if (isDismissedForEl('kw', hit.key, hit.el)) return;
+      ensureMeta('kw', hit.key);
+      out.push(hit);
+    });
+    if (sortNewest.kw) {
+      return out.sort((a, b) => {
+        const ma = hitMeta.get('kw:' + a.key) || { firstSeen: 0 };
+        const mb = hitMeta.get('kw:' + b.key) || { firstSeen: 0 };
+        return mb.firstSeen - ma.firstSeen;
+      });
+    }
+    return out;
   }
 
   function updateJevStatus(text, kind) {
@@ -3288,6 +3321,7 @@
 
   function jevReset() {
     jevCategorized.clear();
+    jevRelevantStore.clear();
     kwPanelData = [];
     const fpReset = foundPanel && foundPanel.isConnected ? foundPanel : null;
     if (fpReset) renderJevFound();
@@ -3968,7 +4002,7 @@
     JEV_FIXED_KEYS, JEV_PROMPT_FIRST_LINE, JEV_PROMPT_TIE_BREAK,
     jevUnseenPosts, jevClassifyPosts, llmClassifyPosts, jevReset, applyJevChip, markJevPending, JEV_PENDING_CLS, updateJevStatus,
     setJevApiKey, getJevApiKey, setLlmKey, getLlmKey, migrateLegacyLlmKeys,
-    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, renderJevFound, collectJevRelevant, seedCategoryTextFromKeywords, parseJevPromptIntoCells, looksLikeFullPrompt, JEV_CATEGORY_PLACEHOLDERS, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
+    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, renderJevFound, collectJevRelevant, jevRelevantHits, seedCategoryTextFromKeywords, parseJevPromptIntoCells, looksLikeFullPrompt, JEV_CATEGORY_PLACEHOLDERS, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,

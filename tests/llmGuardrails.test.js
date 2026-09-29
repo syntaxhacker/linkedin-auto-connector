@@ -537,6 +537,42 @@ describe('llm guardrails', () => {
     }
   });
 
+  test('relevant list survives scans that skip classification', async () => {
+    closePanels();
+    document.body.innerHTML = '';
+    jest.useFakeTimers();
+    global.__LI.setCfg({ jevMode: true, llmMinRunGapMs: 0 });
+    global.__LI.jevReset();
+    const rel = makePost('Senior React role with body text here');
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true, json: () => Promise.resolve({ answers: { c0: { choice: 'relevant', confidence: 0.9, probabilities: {} } } }),
+    }));
+    try {
+      sendMessage({ type: 'FEED_SCAN' });
+      await jest.advanceTimersByTimeAsync(500);
+      await Promise.resolve();
+      const fp = document.getElementById('li-ac-found-panel');
+      expect(fp.querySelectorAll('#li-ac-kw-list [data-key]').length).toBe(1);
+
+      // Now remove the API key: classification is skipped, but the panel must
+      // NOT blank out (regression: renderPanel cleared kwPanelData first).
+      global.__LI.setLlmKey('jev', '');
+      sendMessage({ type: 'FEED_SCAN' });
+      await jest.advanceTimersByTimeAsync(500);
+      await Promise.resolve();
+      const fp2 = document.getElementById('li-ac-found-panel');
+      expect(fp2.querySelectorAll('#li-ac-kw-list [data-key]').length).toBe(1);
+      expect(fp2.querySelector('#li-ac-tabbar').style.display).toBe('none');
+    } finally {
+      global.fetch = realFetch;
+      jest.useRealTimers();
+      global.__LI.setJevApiKey('');
+      global.__LI.setCfg({ jevMode: false });
+      global.__LI.jevReset();
+      closePanels();
+    }
+  });
+
   test('empty input returns ok without fetch', async () => {
     global.fetch = okFetch('relevant', 0.9);
     const res = await global.__LI.llmClassifyPosts([]);

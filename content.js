@@ -315,10 +315,20 @@
       // removing rows breaks LinkedIn's virtualized list, which is what made
       // scrolling feel wrong and stopped new results from lazy-loading.
       '.' + JEV_CHIP_CLS + ' { font: 700 11px/1.4 sans-serif; }' +
-      '.' + JEV_PENDING_CLS + '::before { content: "… queued for AI"; display: inline-block; margin: 4px 4px 0 0; padding: 2px 8px; border-radius: 10px; font: 700 11px/1.4 sans-serif; color: #bbbbbb; background: transparent; border: 1px dashed #666666; }' +
+      '.' + JEV_PENDING_CLS + '::before { content: "… queued for AI"; display: inline-block; margin: 4px 4px 0 0; padding: 2px 8px; border-radius: 10px; font: 700 11px/1.4 sans-serif; color: #4a4a4a; background: #f3f3f3; border: 1px dashed #8a8a8a; }' +
       '.' + JEV_PENDING_CLS + ' { outline: 1px dashed #fbbf24 !important; outline-offset: 2px; }' +
       '.li-ac-jev-concealed, .' + JEV_CONCEAL_CARD_CLS + ' { max-height: 2.5em; overflow: hidden; opacity: .35; border-left: 4px solid ' + C.warn + '; padding-left: 8px; transition: max-height .25s ease, opacity .25s ease; }' +
       '.li-ac-jev-concealed:hover, .' + JEV_CONCEAL_CARD_CLS + ':hover { max-height: 4000px; opacity: 1; }' +
+      // Panel affordances: collapsible groups must LOOK collapsible.
+      '#li-ac-panel details > summary { display: flex; align-items: center; gap: 6px; }' +
+      '#li-ac-panel details > summary::after { content: "\\25B8"; margin-left: auto; font-size: 11px; color: ' + C.info + '; transition: transform .15s ease; }' +
+      '#li-ac-panel details[open] > summary::after { content: "\\25BE"; }' +
+      '#li-ac-panel details > summary:hover { background: rgba(96,165,250,.10); }' +
+      '#li-ac-panel details[open] > summary { background: rgba(96,165,250,.06); }' +
+      // Panel focus visibility (dark background needs an explicit ring).
+      '#li-ac-panel button:focus-visible, #li-ac-panel input:focus-visible, #li-ac-panel select:focus-visible, #li-ac-panel textarea:focus-visible, #li-ac-panel summary:focus-visible, #li-ac-found-panel button:focus-visible { outline: 2px solid ' + C.focus + ' !important; outline-offset: 1px; }' +
+      // Touch targets: keep small controls at >=24px tall.
+      '#li-ac-panel button, #li-ac-found-panel button { min-height: 24px; }' +
       // Jobs page: left list should have no left borders/outlines (user request)
       'body.jobs-page ' + '.' + VIEWED_CLS + ' { box-shadow: none !important; }' +
       'body.jobs-page ' + '.' + HL_CLS + ' { outline: none !important; box-shadow: none !important; }' +
@@ -327,7 +337,7 @@
       'body.jobs-page #li-ac-panel-body > div:has(#li-ac-ultra-hide) { display: none !important; }' +
       'body.jobs-page #li-ac-panel-body > div:has(#li-ac-autoscroll-min) { display: none !important; }' +
       'body.jobs-page #li-ac-kw-section { display: none !important; }' +
-      'body.jobs-page #li-ac-panel-body > div:has(#li-ac-kw-collapse) { display: none !important; }' +
+      'body.jobs-page #li-ac-grp-kw { display: none !important; }' +
       'body.jobs-page #li-ac-found-panel { display: none !important; }' +
       'div[data-componentkey="SearchResults_SearchRightRail"] { display: none !important; }' +
       '.search-reusable-search-right-rail { display: none !important; }';
@@ -574,10 +584,8 @@
         if (u && u.parentElement) u.parentElement.style.display = isJobs ? 'none' : '';
         const m = panel.querySelector('#li-ac-autoscroll-min');
         if (m && m.parentElement) m.parentElement.style.display = isJobs ? 'none' : '';
-        const kw = panel.querySelector('#li-ac-kw-section');
-        if (kw) kw.style.display = isJobs ? 'none' : '';
-        const kwHeader = panel.querySelector('#li-ac-kw-collapse');
-        if (kwHeader && kwHeader.parentElement) kwHeader.parentElement.style.display = isJobs ? 'none' : '';
+        const kwGrp = panel.querySelector('#li-ac-grp-kw');
+        if (kwGrp) kwGrp.style.display = isJobs ? 'none' : '';
       }
       if (foundPanel) {
         // hide entire found panel on jobs search results — highlights are inline only
@@ -1150,6 +1158,7 @@
     };
     renderWithMore(inc, cfg.includeKeywords, 'include');
     renderWithMore(exc, cfg.excludeKeywords, 'exclude');
+    updatePanelSummaries(panelEl);
     refreshJevCategoryCells(panelEl);
   }
 
@@ -1527,17 +1536,14 @@
   // inactive (feed order) = neutral white. Keeps the toggle state visible.
   function applySortButtonStyle(btn, active) {
     if (!btn) return;
-    if (active) {
-      btn.style.background = C.info;       // blue = newest-first is ON
-      btn.style.color = '#000000';
-      btn.textContent = '⇅ Newest';
-      btn.title = 'Newest first (click for feed order)';
-    } else {
-      btn.style.background = BW.fg;        // white = feed order
-      btn.style.color = '#000000';
-      btn.textContent = 'Feed order';
-      btn.title = 'Feed order (click for newest first)';
-    }
+    // Keep a STABLE label + explicit state (checkmark + aria-pressed) so the
+    // button never reads as "the action you'd apply" vs "the current state".
+    btn.textContent = active ? '✓ Newest first' : 'Newest first';
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.style.background = active ? C.info : BW.fg; // blue = on, white = off
+    btn.style.color = '#000000';
+    btn.style.opacity = active ? '1' : '.75';
+    btn.title = active ? 'Sorting newest first — click to use feed order' : 'Using feed order — click to sort newest first';
   }
   // Reflect the current sort state on the Newest button whenever the panel is
   // (re)rendered.
@@ -1638,10 +1644,37 @@
   let kwSectionCollapsed = false;
   function getKwSectionCollapsed() { return kwSectionCollapsed; }
   function applyKwSection(panelEl) {
+    // Collapsible group: the <details> element owns visibility now.
+    const grp = panelEl && panelEl.querySelector('#li-ac-grp-kw');
+    if (grp) grp.open = !kwSectionCollapsed;
     const section = panelEl && panelEl.querySelector('#li-ac-kw-section');
-    const btn = panelEl && panelEl.querySelector('#li-ac-kw-collapse');
-    if (section) section.style.display = kwSectionCollapsed ? 'none' : '';
-    if (btn) btn.textContent = kwSectionCollapsed ? '▲' : '▼';
+    if (section) section.style.display = ''; // legacy shim
+  }
+  // Auto-open groups whose feature is active, so the panel starts at the
+  // useful state (and stays short when nothing is enabled).
+  function applyGroupDefaults(panelEl) {
+    if (!panelEl) return;
+    const set = (id, open) => { const g = panelEl.querySelector('#' + id); if (g) g.open = !!open; };
+    set('li-ac-grp-feed', !!(cfg.autoScroll || cfg.ultraHide || autoScrollDurationMin));
+    set('li-ac-grp-kw', !kwSectionCollapsed);
+    set('li-ac-grp-hl', strArray(cfg.highlightKeywords).length > 0);
+    set('li-ac-grp-jev', !!cfg.jevMode);
+  }
+
+  // One-line summaries so a collapsed group still communicates its state.
+  function updatePanelSummaries(panelEl) {
+    if (!panelEl) return;
+    const kw = panelEl.querySelector('#li-ac-kw-count-summary');
+    if (kw) {
+      const inc = strArray(cfg.includeKeywords).length;
+      const exc = strArray(cfg.excludeKeywords).length;
+      kw.textContent = (inc || exc) ? '· ' + inc + ' in / ' + exc + ' out' : '';
+    }
+    const jev = panelEl.querySelector('#li-ac-jev-summary');
+    if (jev) {
+      const s = getLlmStats();
+      jev.textContent = '· ' + (cfg.jevMode ? 'on' : 'off') + (s.sessionPosts ? ' · ' + s.sessionPosts + ' posts' : '') + (s.killed ? ' · paused' : '');
+    }
   }
   function setKwSectionCollapsed(v) {
     kwSectionCollapsed = !!v;
@@ -1872,24 +1905,25 @@
       panel.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid ' + BW.border + ';font-weight:700;font-size:16px;border-radius:8px 8px 0 0;"><span>🔗 Job Radar</span><button id="li-ac-panel-min" title="Minimize/expand panel" style="flex:none;width:26px;height:26px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:15px;line-height:1;font-weight:700;cursor:pointer;">–</button></div>' +
         '<div id="li-ac-panel-body">' +
-        '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
-          '<input type="checkbox" id="li-ac-autoscroll" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.autoScroll ? ' checked' : '') + '>' +
-          '<label for="li-ac-autoscroll" style="cursor:pointer;">Auto-scroll feed</label>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid ' + BW.border + ';font-size:14px;">' +
-          '<input type="checkbox" id="li-ac-ultra-hide" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.ultraHide ? ' checked' : '') + '>' +
-          '<label for="li-ac-ultra-hide" style="cursor:pointer;" title="Focus mode: collapses posts that match nothing — not listed under Excluded">🎯 Focus mode</label>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid ' + BW.border + ';font-size:13px;">' +
-          '<label for="li-ac-autoscroll-min" style="color:' + BW.muted + ';">Auto-stop after (min)</label>' +
-          '<input type="number" id="li-ac-autoscroll-min" min="0" step="1" value="' + autoScrollDurationMin + '" style="width:64px;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;text-align:center;">' +
-          '<span style="color:' + BW.muted + ';font-size:11px;">0 = never</span>' +
-        '</div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + BW.fg + ';padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
-          '<span>⌨ Keywords</span>' +
-          '<button id="li-ac-kw-collapse" title="Collapse/expand keyword inputs" style="flex:none;width:26px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">▼</button>' +
-        '</div>' +
-          '<div id="li-ac-kw-section" style="padding:8px 12px;border-bottom:1px solid ' + BW.border + ';">' +
+        '<details id="li-ac-grp-feed" style="border-bottom:1px solid ' + BW.border + ';">' +
+          '<summary style="cursor:pointer;padding:8px 12px;font-size:13px;font-weight:700;color:' + BW.fg + ';list-style:none;">Feed options</summary>' +
+          '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid ' + BW.border + ';font-size:14px;">' +
+            '<input type="checkbox" id="li-ac-autoscroll" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.autoScroll ? ' checked' : '') + '>' +
+            '<label for="li-ac-autoscroll" style="cursor:pointer;">Auto-scroll feed</label>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid ' + BW.border + ';font-size:14px;">' +
+            '<input type="checkbox" id="li-ac-ultra-hide" style="accent-color:' + BW.fg + ';width:16px;height:16px;"' + (cfg.ultraHide ? ' checked' : '') + '>' +
+            '<label for="li-ac-ultra-hide" style="cursor:pointer;" title="Focus mode: collapses posts that match nothing — not listed under Excluded">🎯 Focus mode</label>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid ' + BW.border + ';font-size:13px;">' +
+            '<label for="li-ac-autoscroll-min" style="color:' + BW.muted + ';">Auto-stop after (min)</label>' +
+            '<input type="number" id="li-ac-autoscroll-min" min="0" step="1" value="' + autoScrollDurationMin + '" style="width:64px;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;text-align:center;">' +
+            '<span style="color:' + BW.muted + ';font-size:11px;">0 = never</span>' +
+          '</div>' +
+        '</details>' +
+        '<details id="li-ac-grp-kw" style="border-bottom:1px solid ' + BW.border + ';">' +
+          '<summary style="cursor:pointer;padding:8px 12px;font-size:13px;font-weight:700;color:' + BW.fg + ';list-style:none;">⌨ Keywords <span id="li-ac-kw-count-summary" style="font-size:11px;font-weight:400;color:' + BW.muted + ';"></span></summary>' +
+          '<div id="li-ac-kw-section" style="padding:8px 12px;border-top:1px solid ' + BW.border + ';">' +
             '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Include keywords</div>' +
             '<input id="li-ac-kw-include" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react+senior, python · press Enter to add">' +
             '<div id="li-ac-tags-include" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>' +
@@ -1897,25 +1931,26 @@
             '<input id="li-ac-kw-exclude" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder=".net, java, php · press Enter to add">' +
             '<div id="li-ac-tags-exclude" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;"></div>' +
           '</div>' +
-          '<div id="li-ac-highlight-section" style="padding:10px 12px;border-bottom:1px solid ' + BW.border + ';background:rgba(251,191,36,0.04);">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.warn + ';margin-bottom:8px;">' +
-              '<span>✨ Highlights — last pane</span>' +
-              '<span style="font-size:10px;color:' + BW.muted + ';font-weight:400;">quick eye grab</span>' +
-              '<span style="font-size:10px;color:' + (isJobsPage() ? C.ok : BW.muted) + ';border:1px solid ' + (isJobsPage() ? C.ok : BW.border) + ';border-radius:4px;padding:1px 5px;">' + (isJobsPage() ? '● Jobs' : '○ Feed') + '</span>' +
-            '</div>' +
+        '</details>' +
+          '<details id="li-ac-grp-hl" style="border-bottom:1px solid ' + BW.border + ';">' +
+            '<summary style="cursor:pointer;padding:8px 12px;font-size:13px;font-weight:700;color:' + C.warn + ';list-style:none;">✨ Highlights <span style="font-size:10px;font-weight:400;color:' + BW.muted + ';">quick eye grab</span> <span style="font-size:10px;color:' + (isJobsPage() ? C.ok : BW.muted) + ';border:1px solid ' + (isJobsPage() ? C.ok : BW.border) + ';border-radius:4px;padding:1px 5px;">' + (isJobsPage() ? '● Jobs' : '○ Feed') + '</span></summary>' +
+            '<div id="li-ac-highlight-section" style="padding:10px 12px;border-top:1px solid ' + BW.border + ';background:rgba(251,191,36,0.04);">' +
             '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Highlight words (independent)</div>' +
             '<input id="li-ac-hl-input" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:14px;margin-bottom:5px;" placeholder="react, python, tanstack · Enter">' +
             '<div id="li-ac-tags-highlight" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>' +
             '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;">' +
-              '<input type="checkbox" id="li-ac-hl-inline" style="accent-color:' + C.warn + ';width:15px;height:15px;"' + (cfg.highlightInline ? ' checked' : '') + '>' +
+              '<input type="checkbox" id="li-ac-hl-inline" title="Draws colored boxes around your highlight words inside each post" style="accent-color:' + C.warn + ';width:15px;height:15px;"' + (cfg.highlightInline ? ' checked' : '') + '>' +
               '<span>Enable highlight inline</span>' +
             '</label>' +
             '<div style="font-size:11px;color:' + BW.muted + ';margin-top:6px;line-height:1.4;">Highlight words glow per-tag color (● picker) directly in post. Click a row to mark <span style="box-shadow:inset 3px 0 0 ' + C.ok + ';padding-left:4px;">seen</span> (green, keeps in list); <b>Clear seen</b> removes seen rows.</div>' +
-          '</div>' +
-          '<div id="li-ac-jev-section" style="padding:10px 12px;border-bottom:1px solid ' + BW.border + ';background:rgba(96,165,250,0.04);">' +
+            '</div>' +
+          '</details>' +
+          '<details id="li-ac-grp-jev" style="border-bottom:1px solid ' + BW.border + ';">' +
+            '<summary style="cursor:pointer;padding:8px 12px;font-size:13px;font-weight:700;color:' + C.info + ';list-style:none;">AI categorize <span id="li-ac-jev-summary" style="font-size:10px;font-weight:400;color:' + BW.muted + ';"></span></summary>' +
+          '<div id="li-ac-jev-section" style="padding:10px 12px;border-top:1px solid ' + BW.border + ';background:rgba(96,165,250,0.04);">' +
             '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:' + C.info + ';cursor:pointer;margin-bottom:8px;">' +
               '<input type="checkbox" id="li-ac-jev-mode" style="accent-color:' + C.info + ';width:15px;height:15px;"' + (cfg.jevMode ? ' checked' : '') + '>' +
-              '<span>AI categorize (Jev mode)</span>' +
+              '<span>Enable AI categorize</span>' +
             '</label>' +
             '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Provider</div>' +
             '<select id="li-ac-llm-provider" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;margin-bottom:8px;">' +
@@ -1934,8 +1969,9 @@
               '<label for="li-ac-jev-minconf" style="color:' + BW.muted + ';" title="Below this confidence a post is marked unsure">Min confidence</label>' +
               '<input type="number" id="li-ac-jev-minconf" min="0" max="1" step="0.05" value="' + (Math.min(1, Math.max(0, Number(cfg.jevMinConfidence) || 0))) + '" style="width:64px;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;text-align:center;">' +
             '</div>' +
-            '<button id="li-ac-jev-hidden-toggle" title="Temporarily reveal hidden posts" style="width:100%;padding:6px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:4px;" disabled>Show hidden (0)</button>' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:' + BW.muted + ';margin-bottom:5px;"><span>Categories <span style="font-size:10px;">(keys fixed)</span> <span id="li-ac-jev-saved" style="font-size:11px;color:' + C.okText + ';"></span></span><span><button id="li-ac-jev-autofill" title="Fill relevant/excluded from your keywords" style="padding:2px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px;">Autofill</button><button id="li-ac-jev-retry" title="Clear pause and retry" style="padding:2px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px;">Retry</button><button id="li-ac-jev-prompt-reset" title="Clear overrides (back to keyword defaults)" style="padding:2px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">↺</button></span></div>' +
+            '<button id="li-ac-jev-hidden-toggle" title="Session-only peek at AI-collapsed posts (excluded + other + unsure); click again to collapse" style="width:100%;padding:6px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:4px;" disabled>Peek AI-collapsed (0)</button>' +
+            '<div style="font-size:10px;color:' + BW.muted + ';margin-bottom:6px;line-height:1.4;">Chips: <b style="color:' + C.ok + ';">✓ relevant</b> (kept open) · <b>✕ excluded</b> · <b>· other</b> · <b style="color:' + C.warn + ';">? unsure</b> (low confidence) — collapsed posts peek on hover.</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:' + BW.muted + ';margin-bottom:5px;"><span>Categories <span style="font-size:10px;">(keys fixed)</span> <span id="li-ac-jev-saved" style="font-size:11px;color:' + C.okText + ';"></span></span><span><button id="li-ac-jev-autofill" title="Fill relevant/excluded from your keywords" style="padding:3px 9px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px;">Autofill</button><button id="li-ac-jev-retry" title="Clear pause and retry" style="display:none;padding:3px 9px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px;">Retry</button><button id="li-ac-jev-prompt-reset" title="Clear overrides (back to keyword defaults)" style="padding:3px 9px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Reset</button></span></div>' +
             (function () {
               const cells = getJevCategoryCells();
               const meta = { relevant: { label: 'relevant', color: C.ok }, excluded: { label: 'excluded', color: BW.muted }, other: { label: 'other', color: BW.muted } };
@@ -1954,6 +1990,7 @@
             '<div id="li-ac-llm-cost" style="font-size:11px;color:' + BW.muted + ';margin-top:2px;"></div>' +
             '<div style="font-size:10px;color:' + BW.muted + ';margin-top:4px;">Unseen post text is sent to the active provider for classification. See PRIVACY.md.</div>' +
           '</div>' +
+          '</details>' +
           '</div>';
       document.body.appendChild(panel);
       const toggle = panel.querySelector('#li-ac-autoscroll');
@@ -2012,7 +2049,6 @@
           }
         }
       });
-      panel.querySelector('#li-ac-kw-collapse').addEventListener('click', () => toggleKwSection());
       panel.querySelector('#li-ac-panel-min').addEventListener('click', () => togglePanelMinimize());
       // Highlight toggles (last pane feature)
       const hlInline = panel.querySelector('#li-ac-hl-inline');
@@ -2026,6 +2062,8 @@
       const jevToggle = panel.querySelector('#li-ac-jev-mode');
       if (jevToggle) jevToggle.addEventListener('change', () => {
         cfg.jevMode = jevToggle.checked;
+        const grp = panel.querySelector('#li-ac-grp-jev');
+        if (grp) grp.open = !!cfg.jevMode;
         chrome.storage.sync.set({ jevMode: cfg.jevMode });
         // Leaving Jev mode: remove chips/marks or they linger in keyword
         // mode (and chip text would drift postKey-based dedupe).
@@ -2206,8 +2244,10 @@
       updateLlmCostLine();
       updateJevConcealedButton();
       applyKwSection(panel);
+      applyGroupDefaults(panel);
       applyPanelMinimized(panel);
       renderHighlightTags(panel);
+      updatePanelSummaries(panel);
     }
 
     // === Found panel (immediately left of the control panel) ===
@@ -2229,7 +2269,7 @@
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.warn + ';padding:8px 12px;border-bottom:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.12);">' +
           '<span>🔑 Keyword matches</span>' +
           '<span style="display:flex;align-items:center;gap:6px;"><span id="li-ac-kw-count" style="background:' + C.warn + ';color:#000;border-radius:10px;padding:1px 7px;font-size:11px;">0</span><span id="li-ac-kw-sortbar" style="display:flex;gap:4px;">' +
-            '<button id="li-ac-kw-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
+            '<button id="li-ac-kw-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;" aria-pressed="false">Newest first</button>' +
           '</span></span>' +
         '</div>' +
         '<div id="li-ac-kw-list" style="flex:1 1 0;min-height:32vh;overflow-y:auto;padding:5px 8px;"></div>' +
@@ -2238,7 +2278,7 @@
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:' + C.info + ';padding:8px 12px;border-bottom:1px solid rgba(96,165,250,0.25);background:rgba(96,165,250,0.12);">' +
           '<span>📧 Email matches</span>' +
           '<span style="display:flex;align-items:center;gap:6px;"><span id="li-ac-em-count" style="background:' + C.info + ';color:#000;border-radius:10px;padding:1px 7px;font-size:11px;">0</span><span id="li-ac-em-sortbar" style="display:flex;gap:4px;">' +
-            '<button id="li-ac-em-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">⇅ Newest</button>' +
+            '<button id="li-ac-em-sort" title="Sort newest first" style="flex:none;padding:0 7px;height:24px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;" aria-pressed="false">Newest first</button>' +
           '</span></span>' +
         '</div>' +
         '<div id="li-ac-panel-list" style="flex:1 1 0;min-height:32vh;overflow-y:auto;padding:6px 8px;"></div>' +
@@ -2348,7 +2388,7 @@
       // Hide the section's sort/↑/↓ bar when its hit list is empty.
       setSectionBarVisible('kw', kwSorted.length > 0);
       if (!kwSorted.length) {
-        kwList.innerHTML = '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:13px;">No keyword matches</div>';
+        kwList.innerHTML = '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:13px;">No keyword matches yet — add include keywords in ⌨ Keywords</div>';
         kwList.style.minHeight = '0';
       } else {
         kwList.innerHTML = kwSorted.map((hit, i) => hitRowHtml(hit, i, 'kw')).join('');
@@ -2361,7 +2401,7 @@
       // Hide the section's sort/↑/↓ bar when its hit list is empty.
       setSectionBarVisible('em', emSorted.length > 0);
       if (!emSorted.length) {
-        list.innerHTML = '<div style="color:' + BW.muted + ';padding:8px;font-size:13px;">No email matches</div>';
+        list.innerHTML = '<div style="color:' + BW.muted + ';padding:8px;font-size:13px;">No email matches yet — emails inside post text appear here</div>';
         list.style.minHeight = '0';
       } else {
         list.innerHTML = emSorted.map((hit, i) => hitRowHtml(hit, i, 'em')).join('');
@@ -2390,7 +2430,7 @@
           });
         hiddenList.innerHTML = rows.length
           ? rows.join('')
-          : '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:12px;">No hidden posts</div>';
+          : '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:12px;">No hidden posts — nothing matched your exclude keywords</div>';
         hiddenList.style.minHeight = rows.length ? '28vh' : '0';
         if (hiddenCountEl) hiddenCountEl.textContent = rows.length;
         // Mirror counts to tab bar
@@ -2719,10 +2759,10 @@
   }
 
   const JEV_CHIP_STYLE = {
-    relevant: { label: '✓ relevant', fg: '#052e16', bg: '#22c55e' },
-    excluded: { label: '✕ excluded', fg: '#fff', bg: '#555555' },
-    other: { label: '· other', fg: '#bbbbbb', bg: 'rgba(187,187,187,.15)' },
-    unsure: { label: '? unsure', fg: '#000', bg: '#fbbf24' },
+    relevant: { label: '✓ relevant', fg: '#052e16', bg: '#22c55e', title: 'Matches your relevant criteria' },
+    excluded: { label: '✕ excluded', fg: '#fff', bg: '#555555', title: 'Matches your excluded criteria' },
+    other: { label: '· other', fg: '#111', bg: '#e5e5e5', title: 'Neither relevant nor excluded' },
+    unsure: { label: '? unsure', fg: '#000', bg: '#fbbf24', title: 'Low confidence — below your threshold' },
   };
 
   // Pending marker: unseen posts visibly show they're queued for Jev, so
@@ -2764,6 +2804,7 @@
     chip.setAttribute('data-jev-category', cat);
     chip.setAttribute('data-jev-confidence', String(confidence));
     chip.textContent = style.label;
+    chip.title = style.title + (confidence ? ' · confidence ' + Number(confidence).toFixed(2) : '');
     chip.style.cssText = 'display:inline-block;margin:4px 4px 0 0;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;color:' + style.fg + ';background:' + style.bg + ';';
     // Keep the invariant local so applyJevVisibility always sees a verdict.
     try { el.setAttribute('data-jev-done', cat); } catch (_) {}
@@ -2813,7 +2854,7 @@
     if (!btn) return;
     const n = jevConcealedCount();
     btn.disabled = n === 0;
-    btn.textContent = jevShowConcealed ? 'Hide again (' + n + ')' : 'Show hidden (' + n + ')';
+    btn.textContent = jevShowConcealed ? 'Collapse again (' + n + ')' : 'Peek AI-collapsed (' + n + ')';
     btn.style.opacity = n === 0 ? '.45' : '';
   }
   function jevConcealedCount() {
@@ -2825,9 +2866,15 @@
     return n;
   }
 
-  function updateJevStatus(text) {
+  function updateJevStatus(text, kind) {
     const st = document.getElementById('li-ac-jev-status');
-    if (st) st.textContent = text;
+    if (st) {
+      st.textContent = text;
+      // Make failures/pauses visually distinct from progress chatter.
+      const sev = kind || (/error|not granted|unreachable|paused|http \d/i.test(String(text)) ? 'error'
+        : /pacing|throttled|capped|queued|waiting/i.test(String(text)) ? 'warn' : 'info');
+      st.style.color = sev === 'error' ? C.danger : sev === 'warn' ? C.warn : BW.muted;
+    }
     dbg('jev:', text);
   }
 
@@ -2953,12 +3000,19 @@
     const n = Number(usd) || 0;
     return '$' + (n < 0.01 ? n.toFixed(6) : n.toFixed(4));
   }
+  function updateJevRetryVisibility() {
+    const btn = document.getElementById('li-ac-jev-retry');
+    if (btn) btn.style.display = llmStats.killed ? '' : 'none';
+  }
   function updateLlmCostLine() {
+    updateJevRetryVisibility();
     const el = document.getElementById('li-ac-llm-cost');
     if (!el) return;
     const s = getLlmStats();
-    el.textContent = '~' + formatCost(s.estimatedCost) + ' this session · ' +
+    el.textContent = 'Est. ' + formatCost(s.estimatedCost) + ' this session · ' +
       s.sessionReq + ' req · ' + s.sessionPosts + ' posts · ' + getProvider(cfg.llmProviderId).label;
+    el.style.display = cfg.jevMode ? '' : 'none';
+    if (typeof panel !== 'undefined') updatePanelSummaries(panel);
   }
 
   const LLM_STATUS_TEXT = {
@@ -3768,6 +3822,8 @@
       if (panel) {
         const jevToggle = panel.querySelector('#li-ac-jev-mode');
         if (jevToggle) jevToggle.checked = !!cfg.jevMode;
+        const grp = panel.querySelector('#li-ac-grp-jev');
+        if (grp && cfg.jevMode) grp.open = true;
       }
     }
     if (changes.llmProviderId || changes.llmEndpoints || changes.llmModels) {

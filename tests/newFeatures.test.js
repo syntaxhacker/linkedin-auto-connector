@@ -418,13 +418,15 @@ describe('two-panel layout (control + found)', () => {
     await open();
     const found = document.getElementById('li-ac-found-panel');
     const btn = found.querySelector('#li-ac-em-sort');
-    // Newest-first is the default → active (blue), label "⇅ Newest".
+    // Newest-first is the default → active (blue), checkmark + aria-pressed.
     expect(btn.style.background).toBe('rgb(96, 165, 250)'); // #60a5fa
-    expect(btn.textContent).toBe('⇅ Newest');
+    expect(btn.textContent).toMatch(/Newest first/);
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
     btn.click();
     // Toggled off → feed order, white background, label updated.
     expect(btn.style.background).toBe('rgb(255, 255, 255)');
-    expect(btn.textContent).toBe('Feed order');
+    expect(btn.textContent).not.toMatch(/✓/);
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
     btn.click();
     // Back to active.
     expect(btn.style.background).toBe('rgb(96, 165, 250)');
@@ -459,40 +461,33 @@ describe('collapsible keywords section', () => {
     panel = document.getElementById('li-ac-panel');
   }
 
-  test('keyword inputs section is expanded by default', async () => {
+  test('keyword group is expanded by default', async () => {
     await openPanel();
-    const section = panel.querySelector('#li-ac-kw-section');
-    const btn = panel.querySelector('#li-ac-kw-collapse');
-    expect(section.style.display).toBe('');
-    expect(btn.textContent).toBe('▼');
+    const grp = panel.querySelector('#li-ac-grp-kw');
+    expect(grp.open).toBe(true);
     expect(global.__LI.getKwSectionCollapsed()).toBe(false);
   });
 
-  test('clicking the collapse button hides the section and flips the chevron', async () => {
+  test('collapsing the keyword group persists and re-expands', async () => {
     await openPanel();
-    panel.querySelector('#li-ac-kw-collapse').click();
-
+    global.__LI.setKwSectionCollapsed(true);
     expect(global.__LI.getKwSectionCollapsed()).toBe(true);
-    expect(panel.querySelector('#li-ac-kw-section').style.display).toBe('none');
-    expect(panel.querySelector('#li-ac-kw-collapse').textContent).toBe('▲');
+    expect(panel.querySelector('#li-ac-grp-kw').open).toBe(false);
     expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({ kwSectionCollapsed: true });
 
-    // Found lists remain visible (in the separate found panel).
+    // Found lists remain visible (separate found panel).
     const found = document.getElementById('li-ac-found-panel');
     expect(found.querySelector('#li-ac-kw-list').style.display).not.toBe('none');
     expect(found.querySelector('#li-ac-panel-list').style.display).not.toBe('none');
 
-    // Click again to expand.
-    panel.querySelector('#li-ac-kw-collapse').click();
-    expect(global.__LI.getKwSectionCollapsed()).toBe(false);
-    expect(panel.querySelector('#li-ac-kw-section').style.display).toBe('');
-    expect(panel.querySelector('#li-ac-kw-collapse').textContent).toBe('▼');
+    global.__LI.setKwSectionCollapsed(false);
+    expect(panel.querySelector('#li-ac-grp-kw').open).toBe(true);
   });
 
   test('setKwSectionCollapsed applies state and persists; inputs still work when expanded', async () => {
     await openPanel();
     global.__LI.setKwSectionCollapsed(true);
-    expect(panel.querySelector('#li-ac-kw-section').style.display).toBe('none');
+    expect(panel.querySelector('#li-ac-grp-kw').open).toBe(false);
 
     global.__LI.setKwSectionCollapsed(false);
     const inc = panel.querySelector('#li-ac-kw-include');
@@ -506,6 +501,17 @@ describe('collapsible keywords section', () => {
     await openPanel();
     global.__onChanged({ kwSectionCollapsed: { newValue: true } }, 'sync');
     expect(global.__LI.getKwSectionCollapsed()).toBe(true);
-    expect(panel.querySelector('#li-ac-kw-section').style.display).toBe('none');
+    expect(panel.querySelector('#li-ac-grp-kw').open).toBe(false);
+  });
+
+  test('groups are collapsible (panel stays short)', async () => {
+    await openPanel();
+    ['li-ac-grp-feed', 'li-ac-grp-kw', 'li-ac-grp-hl', 'li-ac-grp-jev'].forEach(id => {
+      expect(panel.querySelector('#' + id)).not.toBeNull();
+    });
+    const jev = panel.querySelector('#li-ac-grp-jev');
+    expect(jev.open).toBe(false);
+    jev.open = true;
+    expect(jev.querySelector('#li-ac-jev-cell-relevant')).not.toBeNull();
   });
 });

@@ -31,14 +31,14 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await expect(page.locator('.li-ac-jev-chip[data-jev-category="relevant"]')).toBeVisible();
     // Excluded post collapses to a thin strip (not removed)
     const hiddenToggle = page.locator('#li-ac-jev-hidden-toggle');
-    await expect(hiddenToggle).toContainText('Show hidden (1)');
+    await expect(hiddenToggle).toContainText('Peek AI-collapsed (1)');
     // Cost line tracks the session
     await expect(page.locator('#li-ac-llm-cost')).toContainText('1 req');
     // Peek reveals, second click re-hides
     await hiddenToggle.click();
-    await expect(hiddenToggle).toContainText('Hide again (1)');
+    await expect(hiddenToggle).toContainText('Collapse again (1)');
     await hiddenToggle.click();
-    await expect(hiddenToggle).toContainText('Show hidden (1)');
+    await expect(hiddenToggle).toContainText('Peek AI-collapsed (1)');
     await page.screenshot({ path: 'artifacts/jev-mode-chips.png', fullPage: false });
   });
 
@@ -47,7 +47,7 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await fp.goto('https://www.linkedin.com/feed/', {
       posts: [{ text: 'React hiring post with body' }]
     });
-    await fp.setStorage({ includeKeywords: ['react'], excludeKeywords: ['intern'] });
+    await fp.setStorage({ includeKeywords: ['react'], excludeKeywords: ['intern'], jevMode: true });
     await fp.feedScan();
 
     const relevant = page.locator('#li-ac-jev-cell-relevant');

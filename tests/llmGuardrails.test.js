@@ -602,10 +602,10 @@ describe('llm guardrails', () => {
       await global.__LI.llmClassifyPosts([exc]);
       const btn = document.querySelector('#li-ac-jev-hidden-toggle');
       expect(btn).not.toBeNull();
-      expect(btn.textContent).toMatch(/Show hidden \(1\)/);
+      expect(btn.textContent).toMatch(/Peek AI-collapsed \(1\)/);
       btn.click();
       expect(exc.classList.contains('li-ac-jev-concealed')).toBe(false);
-      expect(btn.textContent).toMatch(/Hide again \(1\)/);
+      expect(btn.textContent).toMatch(/Collapse again \(1\)/);
       btn.click();
       expect(exc.classList.contains('li-ac-jev-concealed')).toBe(true);
     } finally {

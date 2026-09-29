@@ -149,7 +149,11 @@ dashboard work needed. Steps:
   keys, legacy `jevPrompt` migrates into `relevant`. Panel shows one cell per
   key + a read-only prompt preview; Autofill fills relevant/excluded, ↺ clears
   overrides, `jevFollowKeywords` keeps relevant/excluded synced (auto-disables
-  on manual edit). Keys live in
+  on manual edit). Panel groups are collapsible `<details>` with chevrons from
+  injectStyles (auto-open when their feature is active); chip legend +
+  hover-to-peek hint are in-panel; `Retry` only shows when the kill-switch is
+  on; status line is severity-coloured; cost line is "Est." and hidden while
+  Jev mode is off. Keys live in
   `chrome.storage.local` only; entering Jev mode unhides/uncollapses
   keyword-mode posts, exiting calls `jevReset()`.
 - **Clear seen** → removes viewed rows; green marker stays on those feed posts

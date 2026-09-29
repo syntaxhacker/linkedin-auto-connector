@@ -89,10 +89,12 @@ test.describe('Panel interactions — minimize to bubble, clear seen, sorting', 
     const sortBtn = page.locator('#li-ac-kw-sort');
     // Default is Newest (blue) — kw hits exist, so bar is visible
     await expect(sortBtn).toBeVisible();
-    await expect(sortBtn).toContainText('Newest');
+    await expect(sortBtn).toContainText('Newest first');
+    await expect(sortBtn).toHaveAttribute('aria-pressed', 'true');
     await sortBtn.click();
     await page.waitForTimeout(600);
-    await expect(sortBtn).toContainText('Feed order');
+    await expect(sortBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(sortBtn).not.toContainText('✓');
   });
 
   test('panel click disables auto-scroll', async ({ page }) => {

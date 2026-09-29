@@ -533,6 +533,6 @@ describe('collapsible keywords section', () => {
     const jev = panel.querySelector('#li-ac-grp-jev');
     expect(jev.open).toBe(false);
     jev.open = true;
-    expect(jev.querySelector('#li-ac-jev-cell-relevant')).not.toBeNull();
+    expect(jev.querySelector('#li-ac-jev-cat-editor')).not.toBeNull();
   });
 });

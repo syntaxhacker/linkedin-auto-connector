@@ -36,7 +36,7 @@
   };
 
   // === Feed scanner config ===
-  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategoryText: {}, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 };
+  let cfg = { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategories: null, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 };
   // LLM API keys are secrets: in-memory map + chrome.storage.local only, never synced.
   // Legacy single-key installs migrate via migrateLegacyLlmKeys().
   let llmKeys = {};
@@ -1098,13 +1098,9 @@
   function syncCategoryCellsFromCfg(scope) {
     const root = scope || panel;
     if (!root || !root.querySelector) return;
-    const cells = getJevCategoryCells();
-    JEV_FIXED_KEYS.forEach(k => {
-      const el = root.querySelector('#li-ac-jev-cell-' + k);
-      if (el && el.value !== cells[k]) el.value = cells[k];
-    });
+    if (typeof renderJevCategoryEditor === 'function') renderJevCategoryEditor(root);
     const prev = root.querySelector('#li-ac-jev-prompt-preview');
-    if (prev) prev.textContent = buildJevPromptFromCells(cells);
+    if (prev) prev.textContent = getEffectiveJevPrompt();
   }
 
   function renderTags(panelEl) {
@@ -1254,6 +1250,7 @@
 
   let panel = null;
   let foundPanel = null;
+  let renderJevEditorFn = null; // set when the panel is wired
   let panelData = [];
   let kwPanelData = [];
   // Emails we've already auto-jumped to — used so the auto-scroll jump only
@@ -1990,14 +1987,11 @@
             '<button id="li-ac-jev-hidden-toggle" title="Session-only peek at AI-collapsed posts (excluded + other + unsure); click again to collapse" style="width:100%;padding:6px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:4px;" disabled>Peek AI-collapsed (0)</button>' +
             '<div style="font-size:10px;color:' + BW.muted + ';margin-bottom:6px;line-height:1.4;">Chips: <b style="color:' + C.ok + ';">✓ relevant</b> (kept open) · <b>✕ excluded</b> · <b>· other</b> · <b style="color:' + C.warn + ';">? unsure</b> (low confidence) — collapsed posts peek on hover.</div>' +
             '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:' + BW.muted + ';margin-bottom:5px;"><span>Categories <span style="font-size:10px;">(keys fixed)</span> <span id="li-ac-jev-saved" style="font-size:11px;color:' + C.okText + ';"></span></span><span><button id="li-ac-jev-retry" title="Clear pause and retry" style="display:none;padding:3px 9px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px;">Retry</button><button id="li-ac-jev-prompt-reset" title="Clear overrides (back to defaults)" style="padding:3px 9px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Reset</button></span></div>' +
-            (function () {
-              const cells = getJevCategoryCells();
-              const meta = { relevant: { label: 'relevant', color: C.ok }, excluded: { label: 'excluded', color: BW.muted }, other: { label: 'other', color: BW.muted } };
-              return JEV_FIXED_KEYS.map(function (k) {
-                return '<label style="display:block;font-size:11px;font-weight:700;color:' + meta[k].color + ';margin:6px 0 2px;">' + meta[k].label + '</label>' +
-                  '<textarea id="li-ac-jev-cell-' + k + '" rows="2" placeholder="' + escHtml(JEV_CATEGORY_PLACEHOLDERS[k]) + '" style="width:100%;padding:6px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;resize:vertical;">' + escHtml(cells[k]) + '</textarea>';
-              }).join('');
-            })() +
+            '<div id="li-ac-jev-cat-editor"></div>' +
+            '<div style="display:flex;gap:6px;margin:4px 0 6px;">' +
+              '<button id="li-ac-jev-cat-add" title="Add a category" style="padding:3px 9px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">+ Add category</button>' +
+              '<span id="li-ac-jev-cat-hint" style="font-size:10px;color:' + BW.muted + ';align-self:center;">Expand = keep the post open · Collapse = thin strip</span>' +
+            '</div>' +
             '<div style="font-size:11px;color:' + BW.muted + ';margin-bottom:3px;">Prompt preview (read-only)</div>' +
             '<pre id="li-ac-jev-prompt-preview" style="white-space:pre-wrap;word-break:break-word;max-height:110px;overflow:auto;margin:0;padding:6px 8px;border:1px dashed ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.muted + ';font-size:11px;"></pre>' +
             '<div id="li-ac-jev-status" style="font-size:11px;color:' + BW.muted + ';margin-top:6px;line-height:1.4;"></div>' +
@@ -2120,36 +2114,82 @@
         const prev = panel.querySelector('#li-ac-jev-prompt-preview');
         if (prev) prev.textContent = getEffectiveJevPrompt();
       }
-      function syncCategoryCellsFromCfg() {
-        JEV_FIXED_KEYS.forEach(k => {
-          const el = panel.querySelector('#li-ac-jev-cell-' + k);
-          if (el) el.value = getJevCategoryCells()[k];
-        });
-        renderJevPreview();
+      // Render the user's category rows: [action] [label] [criteria] [↑ ↓ ×]
+      function renderJevCategoryEditor(scope) {
+        const root = scope || panel;
+        const host = root && root.querySelector ? root.querySelector('#li-ac-jev-cat-editor') : null;
+        if (!host) return;
+        const cats = getJevCategories();
+        host.innerHTML = cats.map((c, i) => {
+          const expand = c.action === 'expand';
+          return '<div data-cat-row="' + escHtml(c.id) + '" style="border:1px solid ' + BW.border + ';border-radius:6px;padding:6px 7px;margin-bottom:5px;background:' + (expand ? 'rgba(34,197,94,.10)' : 'rgba(187,187,187,.08)') + ';">' +
+            '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">' +
+              '<span style="font-size:11px;color:' + BW.muted + ';">' + (i + 1) + '.</span>' +
+              '<input data-cat-label="' + escHtml(c.id) + '" value="' + escHtml(c.label) + '" title="Category name (shown on posts)" style="flex:1;min-width:0;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;">' +
+              '<select data-cat-action="' + escHtml(c.id) + '" title="What to do with posts in this category" style="padding:4px 5px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:11px;">' +
+                '<option value="expand"' + (expand ? ' selected' : '') + '>Expand</option>' +
+                '<option value="collapse"' + (expand ? '' : ' selected') + '>Collapse</option>' +
+              '</select>' +
+              '<button data-cat-up="' + escHtml(c.id) + '" title="Move up" style="padding:2px 6px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;cursor:pointer;">↑</button>' +
+              '<button data-cat-down="' + escHtml(c.id) + '" title="Move down" style="padding:2px 6px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;cursor:pointer;">↓</button>' +
+              '<button data-cat-remove="' + escHtml(c.id) + '" title="Remove this category" style="padding:2px 7px;background:' + C.danger + ';color:#450a0a;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">×</button>' +
+            '</div>' +
+            '<input data-cat-criteria="' + escHtml(c.id) + '" value="' + escHtml(c.criteria) + '" placeholder="What matches this? e.g. Java-heavy posts, 8+ yrs, walk-ins" title="What the AI should match for this category" style="width:100%;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;">' +
+          '</div>';
+        }).join('');
       }
-      JEV_FIXED_KEYS.forEach(k => {
-        const cell = panel.querySelector('#li-ac-jev-cell-' + k);
-        if (!cell) return;
-        cell.addEventListener('change', () => {
-          if (!setJevCategoryText(k, cell.value)) return;
-          // A cleared cell snaps back to the keyword-derived default so the
-          // user sees exactly what will be sent.
-          const effective = getJevCategoryCells()[k];
-          if (cell.value !== effective) cell.value = effective;
-          chrome.storage.sync.set({ jevCategoryText: cfg.jevCategoryText });
-          markJevPromptSaved(cfg.jevCategoryText[k] ? '✓ saved' : '✓ default');
-          renderJevPreview();
-          scanFeed();
-        });
+      function commitCategories(list, note) {
+        setJevCategories(list);
+        chrome.storage.sync.set({ jevCategories: cfg.jevCategories });
+        renderJevCategoryEditor(panel);
+      renderJevEditorFn = renderJevCategoryEditor;
+        renderJevPreview();
+        markJevPromptSaved('✓ ' + (note || 'saved'));
+        scanFeed();
+      }
+      const jevCatAdd = panel.querySelector('#li-ac-jev-cat-add');
+      if (jevCatAdd) jevCatAdd.addEventListener('click', () => {
+        addJevCategory({ label: 'new category' });
+        commitCategories(getJevCategories(), 'category added');
       });
+      const jevCatHost = panel.querySelector('#li-ac-jev-cat-editor');
+      if (jevCatHost) {
+        jevCatHost.addEventListener('change', e => {
+          const t = e.target;
+          if (!t) return;
+          const list = getJevCategories();
+          const labelId = t.getAttribute('data-cat-label');
+          const actionId = t.getAttribute('data-cat-action');
+          const critId = t.getAttribute('data-cat-criteria');
+          if (labelId) commitCategories(list.map(c => c.id === labelId ? Object.assign({}, c, { label: t.value }) : c));
+          else if (critId) commitCategories(list.map(c => c.id === critId ? Object.assign({}, c, { criteria: t.value }) : c));
+          else if (actionId) commitCategories(list.map(c => c.id === actionId ? Object.assign({}, c, { action: t.value === 'collapse' ? 'collapse' : 'expand' }) : c), 'action saved');
+        });
+        jevCatHost.addEventListener('click', e => {
+          const t = e.target;
+          if (!t) return;
+          const up = t.getAttribute('data-cat-up');
+          const down = t.getAttribute('data-cat-down');
+          const rm = t.getAttribute('data-cat-remove');
+          if (up) { moveJevCategory(up, -1); commitCategories(getJevCategories(), 'reordered'); }
+          else if (down) { moveJevCategory(down, 1); commitCategories(getJevCategories(), 'reordered'); }
+          else if (rm) {
+            if (getJevCategories().length <= 1) { markJevPromptSaved('at least one category is required'); return; }
+            removeJevCategory(rm);
+            commitCategories(getJevCategories(), 'category removed');
+          }
+        });
+      }
       const jevPromptReset = panel.querySelector('#li-ac-jev-prompt-reset');
       if (jevPromptReset) jevPromptReset.addEventListener('click', () => {
-        cfg.jevCategoryText = {};
-        chrome.storage.sync.set({ jevCategoryText: {} });
-        syncCategoryCellsFromCfg();
-        markJevPromptSaved('✓ cleared');
+        cfg.jevCategories = null;
+        chrome.storage.sync.set({ jevCategories: null });
+        renderJevCategoryEditor(panel);
+        renderJevPreview();
+        markJevPromptSaved('✓ reset to one category');
         scanFeed();
       });
+      renderJevCategoryEditor(panel);
       renderJevPreview();
       const advBox = panel.querySelector('#li-ac-adv-tools');
       if (advBox) advBox.addEventListener('change', () => {
@@ -2495,13 +2535,12 @@
   // Calls the TypeSafe/Jev decisions API directly (same endpoint + shape as
   // ~/Documents/jev lib/jev.py classify): one `choice` question per post with
   // the post text embedded, fan-out in a single call. Categories are
-  // auto-derived from include/exclude keywords; cfg.jevCategoryText overrides.
+  // user-owned buckets (cfg.jevCategories); keywords only feed the one-time seed.
   const JEV_API_URL = 'https://api.typesafe.ai/v1/systemone';
   const JEV_MODEL = 'jev-latest';
   const JEV_BATCH = 20;
   const JEV_TEXT_MAX = 500;
   const JEV_CHIP_CLS = 'li-ac-jev-chip';
-  const JEV_CATS = ['relevant', 'excluded', 'other', 'unsure'];
   // Post keys already categorized this session (secondary guard; the
   // data-jev-done attribute is the source of truth since postKey drifts
   // once the chip is prepended). Bounded like HIT_META_CAP.
@@ -2517,30 +2556,134 @@
 
   // === Jev category model: FIXED skeleton, editable VALUES ===
   // Only three category keys exist and their order/labels are fixed. Users
-  // edit the per-key description only (cfg.jevCategoryText); a blank cell
-  // falls back to the keyword-derived default. `unsure` is never a model
-  // choice — it is derived from low confidence.
-  const JEV_FIXED_KEYS = ['relevant', 'excluded', 'other'];
+  // edit nothing structural: the category LIST ITSELF is user-owned
+  // (cfg.jevCategories = [{id,label,criteria,action}]). `unsure` is never a
+  // model choice — it is derived from low confidence.
   const JEV_PROMPT_FIRST_LINE = 'Classify the quoted post into exactly one category.';
-  const JEV_PROMPT_TIE_BREAK = 'When unsure between relevant and excluded, choose excluded.';
-
-  // Shown only as input placeholders — never sent, never stored, and never
-  // shipped as a default (users start empty and fill in their own criteria).
-  const JEV_CATEGORY_PLACEHOLDERS = {
-    relevant: 'e.g. Hiring posts for React/frontend roles, ~4-7 yrs, my cities, day shift',
-    excluded: 'e.g. junior/fresher/intern, 8+ yrs, Java/.NET/iOS, walk-ins, open-to-work posts',
-    other: 'Anything else',
-  };
-
-  // Cells start EMPTY: the first run seeds them from the user's own keyword
-  // lists (load-time seed below), so no wording is imposed on anyone.
-  function buildJevCategoryText() {
-    return { relevant: '', excluded: '', other: '' };
+  const JEV_PROMPT_TAIL = 'Choose the single best-matching category.';
+  // The category the model falls back to is never asked for explicitly.
+  const JEV_MAX_CATEGORIES = 12;
+  const JEV_DEFAULT_CATEGORIES = [{ id: 'relevant', label: 'relevant', criteria: '', action: 'expand' }];
+  let JEV_CAT_SEQ = 0;
+  function newJevCategoryId(prefix) {
+    JEV_CAT_SEQ += 1;
+    return ((prefix || 'cat') + '-' + Date.now().toString(36) + '-' + JEV_CAT_SEQ).toLowerCase();
+  }
+  function normJevLabel(s, fallback) {
+    const v = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    return v.slice(0, 40) || fallback;
+  }
+  // Sanitize any stored list: unique ids, valid actions, single-line strings.
+  function normalizeJevCategories(list) {
+    if (!Array.isArray(list)) return JEV_DEFAULT_CATEGORIES.map(c => Object.assign({}, c));
+    const seen = new Set();
+    const out = [];
+    list.forEach(item => {
+      if (!item || typeof item !== 'object') return;
+      if (out.length >= JEV_MAX_CATEGORIES) return;
+      let id = String(item.id == null ? '' : item.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+      if (!id || seen.has(id)) id = newJevCategoryId('cat');
+      seen.add(id);
+      out.push({
+        id,
+        label: normJevLabel(item.label, 'category'),
+        criteria: String(item.criteria == null ? '' : item.criteria).replace(/\s+/g, ' ').trim().slice(0, 300),
+        action: item.action === 'collapse' ? 'collapse' : 'expand',
+      });
+    });
+    if (!out.length) return JEV_DEFAULT_CATEGORIES.map(c => Object.assign({}, c));
+    return out;
+  }
+  function getJevCategories() {
+    return normalizeJevCategories(cfg.jevCategories);
+  }
+  function setJevCategories(list) {
+    cfg.jevCategories = normalizeJevCategories(list);
+    return cfg.jevCategories;
+  }
+  function addJevCategory(partial) {
+    const list = getJevCategories();
+    if (list.length >= JEV_MAX_CATEGORIES) return false;
+    const label = normJevLabel(partial && partial.label, 'new category');
+    const next = list.concat([{
+      id: (partial && partial.id) || newJevCategoryId('cat'),
+      label,
+      criteria: String((partial && partial.criteria) || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+      action: partial && partial.action === 'collapse' ? 'collapse' : 'expand',
+    }]);
+    setJevCategories(next);
+    return true;
+  }
+  function updateJevCategory(id, patch) {
+    const list = getJevCategories();
+    const i = list.findIndex(c => c.id === id);
+    if (i === -1) return false;
+    list[i] = Object.assign({}, list[i], patch || {});
+    setJevCategories(list);
+    return true;
+  }
+  function removeJevCategory(id) {
+    const list = getJevCategories();
+    if (list.length <= 1) return false; // never zero categories
+    const next = list.filter(c => c.id !== id);
+    if (next.length === list.length) return false;
+    setJevCategories(next);
+    return true;
+  }
+  function moveJevCategory(id, delta) {
+    const list = getJevCategories();
+    const i = list.findIndex(c => c.id === id);
+    if (i === -1) return false;
+    const j = i + (delta < 0 ? -1 : 1);
+    if (j < 0 || j >= list.length) return false;
+    const next = list.slice();
+    const tmp = next[i]; next[i] = next[j]; next[j] = tmp;
+    setJevCategories(next);
+    return true;
+  }
+  function jevCategoryById(id) {
+    return getJevCategories().find(c => c.id === id) || null;
   }
 
-  // One-time seed for existing installs: turn the old keyword lists into a
-  // first draft of the category text, so nothing already typed is lost now
-  // that keywords no longer drive the prompt.
+  // The label + criteria the model is asked to match, per bucket.
+  function buildJevCategories() {
+    const map = {};
+    getJevCategories().forEach(c => {
+      map[c.id] = c.criteria ? (c.label + ': ' + c.criteria) : c.label;
+    });
+    return map;
+  }
+
+  // Fixed skeleton + the USER'S buckets, in the user's order.
+  function buildJevPromptFromCategories(cats) {
+    const list = normalizeJevCategories(cats);
+    let p = JEV_PROMPT_FIRST_LINE + '\n\n';
+    list.forEach(c => {
+      p += '- ' + c.label + ': ' + (c.criteria || '(match by the label above)') + '\n';
+    });
+    p += '\n' + JEV_PROMPT_TAIL;
+    return p;
+  }
+  function getEffectiveJevPrompt() {
+    return buildJevPromptFromCategories(getJevCategories());
+  }
+  function buildJevPrompt() { return getEffectiveJevPrompt(); }
+
+  // --- one-time migration helpers (old installs) -------------------------
+  function looksLikeLegacyPrompt(text) {
+    const t = String(text || '');
+    return /-\s*relevant:/i.test(t) && /-\s*excluded:/i.test(t);
+  }
+  function parseLegacyPromptCells(text) {
+    const t = String(text || '');
+    const grab = key => {
+      const re = new RegExp('-\\s*' + key + '\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:relevant|excluded|other)\\s*:|$)', 'i');
+      const m = t.match(re);
+      return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+    };
+    const clean = v => String(v || '').replace(/\s*When unsure[^.]*\.?\s*$/i, '').trim();
+    return { relevant: clean(grab('relevant')), excluded: clean(grab('excluded')), other: clean(grab('other')) };
+  }
   function seedCategoryTextFromKeywords(include, exclude) {
     const inc = strArray(include);
     const exc = strArray(exclude);
@@ -2550,86 +2693,19 @@
     return out;
   }
 
-  // Some installs still carry a whole-prompt blob in one cell (it used to be a
-  // single free-text textarea, and the legacy migration put it in `relevant`).
-  // Detect that shape and split it into the three cells.
-  function looksLikeFullPrompt(text) {
-    const t = String(text || '');
-    return /-\s*relevant:/i.test(t) && /-\s*excluded:/i.test(t) && /-\s*other:/i.test(t);
-  }
-  function parseJevPromptIntoCells(text) {
-    const t = String(text || '');
-    const grab = key => {
-      const re = new RegExp('-\\s*' + key + ':\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:relevant|excluded|other):|$)', 'i');
-      const m = t.match(re);
-      return m ? m[1].replace(/\s+/g, ' ').trim() : '';
-    };
-    const clean = v => String(v || '')
-      .replace(/\s*When unsure[^.]*\.?\s*$/i, '')
-      .replace(/^\s*(?:Classify|Classify ONLY)[^.]*\.\s*/i, '')
-      .trim();
-    return { relevant: clean(grab('relevant')), excluded: clean(grab('excluded')), other: clean(grab('other')) };
+  // Old fixed trio (or a keyword seed) becomes the first user-owned list.
+  function migrateLegacyCategories(existing, legacyText) {
+    if (Array.isArray(existing) && existing.length) return normalizeJevCategories(existing);
+    const src = (legacyText && typeof legacyText === 'object') ? legacyText : {};
+    const hasLegacy = ['relevant', 'excluded', 'other'].some(k => String(src[k] || '').trim());
+    if (!hasLegacy) return JEV_DEFAULT_CATEGORIES.map(c => Object.assign({}, c));
+    return normalizeJevCategories([
+      { id: 'relevant', label: 'relevant', criteria: String(src.relevant || '').trim(), action: 'expand' },
+      { id: 'excluded', label: 'excluded', criteria: String(src.excluded || '').trim(), action: 'collapse' },
+      { id: 'other', label: 'other', criteria: String(src.other || '').trim(), action: 'collapse' },
+    ]);
   }
 
-  // Effective values: user override when non-blank, else the static default.
-  // Unknown keys in cfg are ignored; the key set is always fixed.
-  function getJevCategoryCells() {
-    const defaults = buildJevCategoryText();
-    const overrides = (cfg.jevCategoryText && typeof cfg.jevCategoryText === 'object') ? cfg.jevCategoryText : {};
-    const out = {};
-    JEV_FIXED_KEYS.forEach(k => {
-      const ov = typeof overrides[k] === 'string' ? overrides[k].trim() : '';
-      out[k] = ov || defaults[k];
-    });
-    return out;
-  }
-
-  // Editable values ONLY. Unknown keys are rejected (structure is fixed).
-  function setJevCategoryText(key, value) {
-    if (JEV_FIXED_KEYS.indexOf(key) === -1) return false;
-    // Values are single-line: collapse whitespace so a value can never inject
-    // extra "- <key>:" bullets (or a fake tie-break) into the fixed skeleton.
-    const cleaned = String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
-    cfg.jevCategoryText = Object.assign({}, cfg.jevCategoryText);
-    if (cleaned) cfg.jevCategoryText[key] = cleaned;
-    else delete cfg.jevCategoryText[key];
-    return true;
-  }
-
-  // Fixed skeleton + values, in a fixed key order (deterministic).
-  function buildJevPromptFromCells(cells) {
-    const c = cells || {};
-    let p = JEV_PROMPT_FIRST_LINE + '\n\n';
-    JEV_FIXED_KEYS.forEach(k => {
-      // Defense in depth: normalize even values that reached storage directly.
-      const v = String(c[k] == null ? '' : c[k]).replace(/\s+/g, ' ').trim();
-      p += '- ' + k + ': ' + v + '\n';
-    });
-    p += '\n' + JEV_PROMPT_TIE_BREAK;
-    return p;
-  }
-
-  // Back-compat: category objects derived from the same cells.
-  function buildJevCategories() {
-    const cells = getJevCategoryCells();
-    return { relevant: cells.relevant, excluded: cells.excluded, other: cells.other };
-  }
-
-  function buildJevPrompt() {
-    return buildJevPromptFromCells(getJevCategoryCells());
-  }
-
-  function getEffectiveJevPrompt() {
-    return buildJevPromptFromCells(getJevCategoryCells());
-  }
-
-  // Legacy single-textarea writes are preserved as the `relevant` value.
-  function migrateLegacyJevPrompt(localObj, currentCells) {
-    const out = Object.assign({}, currentCells || {});
-    const legacy = localObj && typeof localObj.jevPrompt === 'string' ? localObj.jevPrompt.trim() : '';
-    if (legacy) out.relevant = legacy;
-    return out;
-  }
 
   // Shared truncation (both present + future providers): collapse
   // whitespace and cap length so input tokens stay linear and small.
@@ -2791,12 +2867,19 @@
     });
   }
 
+  // Chip look is derived from the bucket's ACTION (expanded = positive colour,
+  // collapsed = muted), so users can invent any labels they like.
   const JEV_CHIP_STYLE = {
-    relevant: { label: '✓ relevant', fg: '#052e16', bg: '#22c55e', title: 'Matches your relevant criteria' },
-    excluded: { label: '✕ excluded', fg: '#fff', bg: '#555555', title: 'Matches your excluded criteria' },
-    other: { label: '· other', fg: '#111', bg: '#e5e5e5', title: 'Neither relevant nor excluded' },
-    unsure: { label: '? unsure', fg: '#000', bg: '#fbbf24', title: 'Low confidence — below your threshold' },
+    expand: { fg: '#052e16', bg: '#22c55e', glyph: '✓' },
+    collapse: { fg: '#fff', bg: '#555555', glyph: '·' },
+    unsure: { fg: '#000', bg: '#fbbf24', glyph: '?' },
   };
+  function jevChipStyleFor(catId) {
+    if (catId === 'unsure') return { key: 'unsure', label: 'unsure', style: JEV_CHIP_STYLE.unsure };
+    const cat = jevCategoryById(catId);
+    if (!cat) return { key: 'unsure', label: 'unsure', style: JEV_CHIP_STYLE.unsure };
+    return { key: cat.action, label: cat.label, style: JEV_CHIP_STYLE[cat.action] };
+  }
 
   // Pending marker: unseen posts visibly show they're queued for Jev, so
   // "no chip" unambiguously means "not processed yet". Implemented as a class
@@ -2820,7 +2903,9 @@
   function applyJevChip(el, category, confidence) {
     if (!el || !el.isConnected) return null;
     if (el.classList) el.classList.remove(JEV_PENDING_CLS);
-    const cat = JEV_CATS.includes(category) ? category : 'unsure';
+    const known = category === 'unsure' || !!jevCategoryById(category);
+    const cat = known ? category : 'unsure';
+    const chipInfo = jevChipStyleFor(cat);
     let chip = null;
     if (el.children) {
       for (const c of el.children) {
@@ -2833,14 +2918,16 @@
       if (el.prepend) el.prepend(chip);
       else el.appendChild(chip);
     }
-    const style = JEV_CHIP_STYLE[cat];
+    const style = chipInfo.style;
     chip.setAttribute('data-jev-category', cat);
     chip.setAttribute('data-jev-confidence', String(confidence));
-    chip.textContent = style.label;
-    chip.title = style.title + (confidence ? ' · confidence ' + Number(confidence).toFixed(2) : '');
+    chip.textContent = style.glyph + ' ' + chipInfo.label;
+    chip.title = 'AI category: ' + chipInfo.label +
+      (cat === 'unsure' ? ' (low confidence)' : (chipInfo.key === 'collapse' ? ' (collapsed)' : ' (expanded)')) +
+      (confidence ? ' · confidence ' + Number(confidence).toFixed(2) : '');
     chip.style.cssText = 'display:inline-block;margin:4px 4px 0 0;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;color:' + style.fg + ';background:' + style.bg + ';';
     // Keep the invariant local so applyJevVisibility always sees a verdict.
-    try { el.setAttribute('data-jev-done', cat); } catch (_) {}
+    try { el.setAttribute('data-jev-done', cat); el.setAttribute('data-jev-cat', cat); } catch (_) {}
     applyJevVisibility(el);
     updateJevConcealedButton();
     return chip;
@@ -2854,7 +2941,11 @@
   const JEV_CONCEAL_CARD_CLS = 'li-ac-jev-concealed-card';
   let jevShowConcealed = false;
   function jevIsConcealedCat(cat) {
-    return !!cat && cat !== 'relevant' && !jevShowConcealed;
+    if (!cat || jevShowConcealed) return false;
+    if (cat === 'unsure') return true;
+    const bucket = jevCategoryById(cat);
+    if (!bucket) return true; // unknown → don't leave it expanded
+    return bucket.action === 'collapse';
   }
   function jevCardWrapper(el) {
     try {
@@ -2894,7 +2985,7 @@
     let n = 0;
     document.querySelectorAll('[data-jev-done]').forEach(el => {
       const cat = el.getAttribute('data-jev-done');
-      if (cat && cat !== 'relevant') n++;
+      if (jevIsConcealedCat(cat) || (cat && cat !== 'unsure' && (jevCategoryById(cat) || {}).action === 'collapse')) n++;
     });
     return n;
   }
@@ -2906,7 +2997,9 @@
   const jevRelevantStore = new Map();
   function collectJevRelevant(posts) {
     (posts || []).forEach(p => {
-      if (!p || !p.getAttribute || p.getAttribute('data-jev-done') !== 'relevant') return;
+      const done = p && p.getAttribute ? p.getAttribute('data-jev-done') : '';
+      const bucket = done && done !== 'unsure' ? jevCategoryById(done) : null;
+      if (!bucket || bucket.action !== 'expand') return;
       const key = postKey(p);
       if (!key) return;
       const existing = jevRelevantStore.get(key);
@@ -3735,7 +3828,7 @@
 
   // === Load config + init ===
   chrome.storage.sync.get(
-    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategoryText: {}, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 },
+    { autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: true, kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false, highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategories: null, showAdvancedTools: false, jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000 },
     opts => {
       // Ensure highlight defaults if missing (old installs)
       if (opts.highlightInline === undefined) opts.highlightInline = true;
@@ -3743,40 +3836,26 @@
       opts.highlightKeywords = normalizeHighlightItems(opts.highlightKeywords);
       cfg = opts;
       if (typeof cfg.jevPrompt !== 'string') cfg.jevPrompt = '';
-      if (!cfg.jevCategoryText || typeof cfg.jevCategoryText !== 'object' || Array.isArray(cfg.jevCategoryText)) cfg.jevCategoryText = {};
-      // One-time migration: an old single-textarea prompt becomes the
+        // One-time migration: an old single-textarea prompt becomes the
       // `relevant` value, then the legacy field is cleared.
-      // Repair: a whole prompt pasted into one cell (old single-textarea
-      // installs) is split into the three category cells.
+      // Categories are user-owned. One-time migration builds the first list
+      // from anything already saved (old fixed trio, keyword seed, or a whole
+      // prompt blob pasted into the old single textarea).
       try {
-        const blob = ['relevant', 'excluded', 'other']
-          .map(k => (cfg.jevCategoryText && cfg.jevCategoryText[k]) || '')
-          .find(looksLikeFullPrompt);
-        if (blob) {
-          const split = parseJevPromptIntoCells(blob);
-          cfg.jevCategoryText = {
-            relevant: split.relevant || cfg.jevCategoryText.relevant || '',
-            excluded: split.excluded || cfg.jevCategoryText.excluded || '',
-            other: split.other || cfg.jevCategoryText.other || '',
-          };
-          try { chrome.storage.sync.set({ jevCategoryText: cfg.jevCategoryText }); } catch (_) {}
+        if (!Array.isArray(cfg.jevCategories) || !cfg.jevCategories.length) {
+          let legacy = cfg.jevCategoryText && typeof cfg.jevCategoryText === 'object' ? Object.assign({}, cfg.jevCategoryText) : {};
+          const blob = ['relevant', 'excluded', 'other'].map(k => legacy[k] || '').find(t => looksLikeLegacyPrompt(t));
+          if (blob) legacy = parseLegacyPromptCells(blob);
+          if (!['relevant', 'excluded', 'other'].some(k => String(legacy[k] || '').trim())) {
+            legacy = seedCategoryTextFromKeywords(cfg.includeKeywords, cfg.excludeKeywords);
+          }
+          if (cfg.jevPrompt && !['relevant', 'excluded', 'other'].some(k => String(legacy[k] || '').trim())) {
+            legacy.relevant = cfg.jevPrompt;
+          }
+          cfg.jevCategories = migrateLegacyCategories(cfg.jevCategories, legacy);
+          try { chrome.storage.sync.set({ jevCategories: cfg.jevCategories }); } catch (_) {}
         }
       } catch (_) {}
-      // One-time seed: previous keyword lists become the category text draft.
-      try {
-        if (!cfg.jevCategoryText.relevant || !cfg.jevCategoryText.excluded) {
-          const seeded = seedCategoryTextFromKeywords(cfg.includeKeywords, cfg.excludeKeywords);
-          let seededChanged = false;
-          if (seeded.relevant && !cfg.jevCategoryText.relevant) { cfg.jevCategoryText.relevant = seeded.relevant; seededChanged = true; }
-          if (seeded.excluded && !cfg.jevCategoryText.excluded) { cfg.jevCategoryText.excluded = seeded.excluded; seededChanged = true; }
-          if (seededChanged) { try { chrome.storage.sync.set({ jevCategoryText: cfg.jevCategoryText }); } catch (_) {} }
-        }
-      } catch (_) {}
-      if (cfg.jevPrompt.trim() && !cfg.jevCategoryText.relevant) {
-        cfg.jevCategoryText = migrateLegacyJevPrompt({ jevPrompt: cfg.jevPrompt }, cfg.jevCategoryText);
-        cfg.jevPrompt = '';
-        try { chrome.storage.sync.set({ jevCategoryText: cfg.jevCategoryText, jevPrompt: '' }); } catch (_) {}
-      }
       if (migrateLlmDefaults(cfg)) {
         try { chrome.storage.sync.set({ llmPerMinReq: cfg.llmPerMinReq }); } catch (_) {}
       }
@@ -3866,13 +3945,12 @@
 
   onChangedListener = (changes, area) => {
     if (area !== 'sync') return;
-    ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin', 'highlightInline', 'highlightKeywords', 'jevMode', 'jevPrompt', 'jevCategoryText', 'showAdvancedTools', 'jevMinConfidence', 'llmProviderId', 'llmEndpoints', 'llmModels', 'llmDailyCapPosts', 'llmPerMinReq', 'llmMinRunGapMs'].forEach(k => {
+    ['autoExpand', 'scanEmails', 'includeKeywords', 'excludeKeywords', 'autoScroll', 'debug', 'kwSectionCollapsed', 'autoScrollDurationMin', 'highlightInline', 'highlightKeywords', 'jevMode', 'jevPrompt', 'jevCategories', 'showAdvancedTools', 'jevMinConfidence', 'llmProviderId', 'llmEndpoints', 'llmModels', 'llmDailyCapPosts', 'llmPerMinReq', 'llmMinRunGapMs'].forEach(k => {
       // H3: a removed key reports {oldValue} with no newValue — don't write
       // undefined, which would crash .length/.forEach callers later.
       if (changes[k] && changes[k].newValue !== undefined) cfg[k] = changes[k].newValue;
     });
     if (typeof cfg.jevPrompt !== 'string') cfg.jevPrompt = '';
-    if (!cfg.jevCategoryText || typeof cfg.jevCategoryText !== 'object' || Array.isArray(cfg.jevCategoryText)) cfg.jevCategoryText = {};
     if (changes.kwSectionCollapsed) {
       kwSectionCollapsed = !!changes.kwSectionCollapsed.newValue;
       if (panel) applyKwSection(panel);
@@ -3953,9 +4031,9 @@
         applyGroupDefaults(panel);
       }
     }
-    if (changes.jevCategoryText) {
-      if (!cfg.jevCategoryText || typeof cfg.jevCategoryText !== 'object' || Array.isArray(cfg.jevCategoryText)) cfg.jevCategoryText = {};
-      if (panel) syncCategoryCellsFromCfg(panel);
+    if (changes.jevCategories) {
+      cfg.jevCategories = normalizeJevCategories(cfg.jevCategories);
+      if (panel && renderJevEditorFn) renderJevEditorFn(panel);
     }
     if (changes.highlightKeywords) {
       let v = changes.highlightKeywords.newValue;
@@ -3967,7 +4045,7 @@
     }
     // L4: only re-scan when a field that affects scanning actually changed,
     // otherwise an unrelated storage write (e.g. debug) needlessly re-scans.
-    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails', 'highlightInline', 'highlightKeywords', 'jevMode', 'jevPrompt', 'jevCategoryText', 'showAdvancedTools', 'jevMinConfidence', 'llmProviderId', 'llmEndpoints', 'llmModels', 'llmDailyCapPosts', 'llmPerMinReq'];
+    const scanKeys = ['autoScroll', 'ultraHide', 'includeKeywords', 'excludeKeywords', 'autoExpand', 'scanEmails', 'highlightInline', 'highlightKeywords', 'jevMode', 'jevPrompt', 'jevCategories', 'showAdvancedTools', 'jevMinConfidence', 'llmProviderId', 'llmEndpoints', 'llmModels', 'llmDailyCapPosts', 'llmPerMinReq'];
     if (scanKeys.some(k => changes[k])) scanFeed();
   };
   chrome.storage.onChanged.addListener(onChangedListener);
@@ -3998,11 +4076,13 @@
     LLM_PROVIDERS, getProvider, getProviderEndpoint, getProviderModel,
     validateEndpoint, truncatePostText, buildJevItems,
     buildJevCategories, buildJevPrompt, getEffectiveJevPrompt, buildJevQuestions,
-    buildJevCategoryText, getJevCategoryCells, setJevCategoryText, buildJevPromptFromCells, migrateLegacyJevPrompt,
-    JEV_FIXED_KEYS, JEV_PROMPT_FIRST_LINE, JEV_PROMPT_TIE_BREAK,
+    getJevCategories, setJevCategories, addJevCategory, updateJevCategory, removeJevCategory,
+    moveJevCategory, normalizeJevCategories, buildJevPromptFromCategories, jevCategoryById,
+    migrateLegacyCategories, JEV_PROMPT_FIRST_LINE, JEV_PROMPT_TAIL, JEV_MAX_CATEGORIES,
+    looksLikeLegacyPrompt, parseLegacyPromptCells, seedCategoryTextFromKeywords,
     jevUnseenPosts, jevClassifyPosts, llmClassifyPosts, jevReset, applyJevChip, markJevPending, JEV_PENDING_CLS, updateJevStatus,
     setJevApiKey, getJevApiKey, setLlmKey, getLlmKey, migrateLegacyLlmKeys,
-    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, renderJevFound, collectJevRelevant, jevRelevantHits, seedCategoryTextFromKeywords, parseJevPromptIntoCells, looksLikeFullPrompt, JEV_CATEGORY_PLACEHOLDERS, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
+    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, renderJevFound, collectJevRelevant, jevRelevantHits, seedCategoryTextFromKeywords, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,

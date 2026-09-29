@@ -48,7 +48,7 @@ class LinkedInFeedPage {
       window.__storageData = {
         autoExpand: true, scanEmails: true, includeKeywords: [], excludeKeywords: [], autoScroll: false, ultraHide: false, debug: false,
         kwSectionCollapsed: false, autoScrollDurationMin: 0, panelMinimized: false, foundPanelMinimized: false,
-        highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategoryText: {}, showAdvancedTools: true,
+        highlightInline: true, highlightKeywords: [], jevMode: false, jevPrompt: '', jevCategories: null, showAdvancedTools: true,
         jevMinConfidence: 0.7, llmProviderId: 'jev', llmEndpoints: {}, llmModels: {},
         llmDailyCapPosts: 500, llmPerMinReq: 20, llmMinRunGapMs: 3000
       };

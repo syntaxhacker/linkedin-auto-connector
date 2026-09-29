@@ -90,7 +90,7 @@ dashboard work needed. Steps:
   (content.js:39). Keys: `autoExpand, scanEmails, includeKeywords,
   excludeKeywords, autoScroll, ultraHide, debug, kwSectionCollapsed,
   autoScrollDurationMin, panelMinimized, foundPanelMinimized,
-  highlightInline, highlightKeywords, jevMode, jevPrompt, jevCategoryText,
+  highlightInline, highlightKeywords, jevMode, jevPrompt, jevCategories,
   jevMinConfidence, showAdvancedTools, llmProviderId, llmEndpoints, llmModels,
   llmDailyCapPosts, llmPerMinReq, llmMinRunGapMs` (plus per-provider API keys
   in `chrome.storage.local` only — never synced, never logged, never rendered
@@ -143,15 +143,19 @@ dashboard work needed. Steps:
   (`llmDailyCapPosts`), 20/min throttle, 401/double-429 kill-switch with panel
   Retry, live cost line. Categories use a FIXED skeleton (fixed first line,
   fixed key order relevant/excluded/other, fixed tie-break) with editable
-  VALUES only: `cfg.jevCategoryText = {relevant,excluded,other}` built by
-  `buildJevCategoryText` (EMPTY defaults) / `getJevCategoryCells` /
-  `buildJevPromptFromCells`; cells start EMPTY (placeholders are UI-only),
-  `setJevCategoryText` rejects unknown keys, a pasted whole-prompt blob is
-  split by `parseJevPromptIntoCells`, legacy `jevPrompt` migrates into
-  `relevant`, and `seedCategoryTextFromKeywords` seeds cells once from the
-  user's own keyword lists.
-  Panel shows one cell per key + a read-only prompt preview; ↺ clears
-  overrides. In AI mode the Found panel becomes a single "✓ Relevant posts"
+  CATEGORIES ARE USER-OWNED: `cfg.jevCategories = [{id,label,criteria,action}]`
+  (ordered, max `JEV_MAX_CATEGORIES`=12, at least one). `action` is
+  'expand' | 'collapse' and decides whether that bucket's posts stay open or
+  become a thin strip; the chip shows the bucket label coloured by action.
+  Model helpers: normalize/get/set/add/update/remove/move + jevCategoryById;
+  `buildJevCategories()` maps id -> "label: criteria" for providers and
+  `buildJevPromptFromCategories` renders the fixed skeleton + the user's
+  bullets + `JEV_PROMPT_TAIL`. Legacy migration (`migrateLegacyCategories`,
+  `parseLegacyPromptCells`, `seedCategoryTextFromKeywords`) builds the first
+  list from the old trio / a pasted prompt blob / keyword lists.
+  Panel renders the editor (`renderJevCategoryEditor`): per row a label input,
+  an Expand/Collapse select, up/down/remove, and a criteria input; `+ Add
+  category` and ↺ (reset to one bucket) sit below, with a read-only preview. In AI mode the Found panel becomes a single "✓ Relevant posts"
   list (renderJevFound + the persistent jevRelevantStore/jevRelevantHits, so a
   scan that skips classification cannot blank it) — the manual Keywords/Emails/
   Excluded tabs are hidden there; rows carry data-kind="kw" so the existing

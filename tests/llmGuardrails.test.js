@@ -27,6 +27,12 @@ describe('llm guardrails', () => {
     global.__LI.setCfg({
       includeKeywords: ['react'], excludeKeywords: [], jevPrompt: '',
       jevMinConfidence: 0.7, llmProviderId: 'jev',
+      llmCategories: null,
+      jevCategories: [
+        { id: 'relevant', label: 'relevant', criteria: '', action: 'expand' },
+        { id: 'excluded', label: 'excluded', criteria: '', action: 'collapse' },
+        { id: 'other', label: 'other', criteria: '', action: 'collapse' },
+      ],
       llmEndpoints: {}, llmModels: {},
       llmDailyCapPosts: 500, llmPerMinReq: 60, llmMinRunGapMs: 0,
     });

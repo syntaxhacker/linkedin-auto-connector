@@ -30,6 +30,10 @@ describe('jev classify', () => {
       jevPrompt: '',
       jevMinConfidence: 0.7,
       llmMinRunGapMs: 0,
+      jevCategories: [
+        { id: 'relevant', label: 'relevant', criteria: '', action: 'expand' },
+        { id: 'excluded', label: 'excluded', criteria: '', action: 'collapse' },
+      ],
     });
     global.__LI.resetLlmSession();
     global.__LI.resetLlmDaily();

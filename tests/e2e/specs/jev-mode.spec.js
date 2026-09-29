@@ -23,7 +23,14 @@ test.describe('Jev mode — AI categorize end to end', () => {
         } }),
       });
     });
-    await fp.setStorage({ jevMode: true, includeKeywords: ['react'] });
+    await fp.setStorage({
+      jevMode: true,
+      includeKeywords: ['react'],
+      jevCategories: [
+        { id: 'relevant', label: 'relevant', criteria: 'React roles', action: 'expand' },
+        { id: 'excluded', label: 'excluded', criteria: 'intern/java', action: 'collapse' },
+      ],
+    });
     await fp.feedScan();
 
     const chips = page.locator('.li-ac-jev-chip');
@@ -46,7 +53,7 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await page.screenshot({ path: 'artifacts/jev-mode-chips.png', fullPage: false });
   });
 
-  test('category cells hold standalone text and save edits', async ({ page }) => {
+  test('user can add a category with its own action and criteria', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       posts: [{ text: 'React hiring post with body' }]
@@ -54,13 +61,20 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await fp.setStorage({ jevMode: true });
     await fp.feedScan();
 
-    const relevant = page.locator('#li-ac-jev-cell-relevant');
-    await expect(relevant).toHaveValue('');
+    // one default bucket, user-owned
+    await expect(page.locator('#li-ac-jev-cat-editor [data-cat-row]')).toHaveCount(1);
     await expect(page.locator('#li-ac-jev-prompt-preview')).toContainText('Classify the quoted post into exactly one category.');
-    await expect(page.locator('#li-ac-jev-prompt')).toHaveCount(0); // legacy textarea gone
-    await relevant.fill('Senior fintech React only');
-    await relevant.blur();
-    await expect(page.locator('#li-ac-jev-saved')).toContainText(/saved/i);
-    await expect(page.locator('#li-ac-jev-prompt-preview')).toContainText('Senior fintech React only');
+
+    await page.locator('#li-ac-jev-cat-add').click();
+    await expect(page.locator('#li-ac-jev-cat-editor [data-cat-row]')).toHaveCount(2);
+
+    const rows = page.locator('#li-ac-jev-cat-editor [data-cat-row]');
+    const second = rows.nth(1);
+    const crit = second.locator('[data-cat-criteria]');
+    await crit.fill('Java-heavy posts');
+    await crit.blur();
+    await second.locator('[data-cat-action]').selectOption('collapse');
+    await expect(page.locator('#li-ac-jev-prompt-preview')).toContainText('Java-heavy posts');
+    await expect(page.locator('#li-ac-jev-saved')).toContainText(/saved|action/i);
   });
 });

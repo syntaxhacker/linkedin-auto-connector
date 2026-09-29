@@ -1,118 +1,11 @@
 'use strict';
 
 /**
- * Jev panel UI — per-category VALUE cells on a FIXED skeleton.
- * (Pure model behavior lives in tests/jevCategories.test.js.)
+ * Jev panel UI — user-owned category editor (label + criteria + action).
+ * The model itself is covered by tests/jevCategoryList.test.js.
  */
 
 const { makePost, sendMessage, closePanels } = require('./helpers');
-
-describe('jev prompt builder (compat surface)', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-    global.__LI.setCfg({ includeKeywords: [], excludeKeywords: [], jevCategoryText: {}, jevPrompt: '' });
-  });
-
-  test('categories are standalone (keyword lists do not shape them)', () => {
-    global.__LI.setCfg({ includeKeywords: ['react', 'senior'], excludeKeywords: ['intern'] });
-    const cats = global.__LI.buildJevCategories();
-    expect(Object.keys(cats).sort()).toEqual(['excluded', 'other', 'relevant']);
-    expect(cats.relevant).toBe('');
-    expect(cats.excluded).toBe('');
-  });
-
-  test('effective prompt keeps the fixed skeleton and reflects a cell override', () => {
-    global.__LI.setCfg({ jevCategoryText: { relevant: 'fintech only' } });
-    const prompt = global.__LI.getEffectiveJevPrompt();
-    expect(prompt.startsWith(global.__LI.JEV_PROMPT_FIRST_LINE)).toBe(true);
-    expect(prompt).toContain(global.__LI.JEV_PROMPT_TIE_BREAK);
-    expect(prompt).toContain('fintech only');
-  });
-});
-
-describe('jev category cells (manual + autofill)', () => {
-  beforeEach(() => {
-    closePanels();
-    global.__LI.cleanup();
-    document.body.innerHTML = '';
-    global.__LI.setCfg({ includeKeywords: [], excludeKeywords: [], jevCategoryText: {}, llmMinRunGapMs: 0 });
-    global.__LI.resetLlmSession();
-    global.__LI.resetLlmDaily();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-    closePanels();
-  });
-
-  async function openPanel() {
-    jest.useFakeTimers();
-    makePost('React hiring post with body text here');
-    sendMessage({ type: 'FEED_SCAN' });
-    await jest.advanceTimersByTimeAsync(500);
-  }
-  const cell = k => document.querySelector('#li-ac-jev-cell-' + k);
-  const preview = () => document.querySelector('#li-ac-jev-prompt-preview');
-  const saved = () => document.querySelector('#li-ac-jev-saved');
-
-  test('three fixed cells render and the preview shows the fixed skeleton', async () => {
-    await openPanel();
-    expect(cell('relevant')).not.toBeNull();
-    expect(cell('excluded')).not.toBeNull();
-    expect(cell('other')).not.toBeNull();
-    expect(document.querySelector('#li-ac-jev-prompt')).toBeNull(); // old textarea gone
-    expect(preview().textContent.startsWith(global.__LI.JEV_PROMPT_FIRST_LINE)).toBe(true);
-    expect(preview().textContent).toContain(global.__LI.JEV_PROMPT_TIE_BREAK);
-  });
-
-  test('cells start empty with placeholders', async () => {
-    await openPanel();
-    expect(cell('relevant').value).toBe('');
-    expect(cell('excluded').value).toBe('');
-    expect(cell('other').value).toBe('');
-    expect(cell('relevant').getAttribute('placeholder')).toMatch(/e\.g\./i);
-  });
-
-  test('editing a cell saves it and the preview follows', async () => {
-    await openPanel();
-    cell('relevant').value = 'ONLY fintech hiring posts';
-    cell('relevant').dispatchEvent(new Event('change', { bubbles: true }));
-    expect(global.__LI.getCfg().jevCategoryText.relevant).toBe('ONLY fintech hiring posts');
-    expect(preview().textContent).toContain('ONLY fintech hiring posts');
-    expect(preview().textContent.startsWith(global.__LI.JEV_PROMPT_FIRST_LINE)).toBe(true);
-    expect(saved().textContent).toMatch(/saved/i);
-  });
-
-  test('clearing a cell empties it again', async () => {
-    await openPanel();
-    cell('relevant').value = 'temp override';
-    cell('relevant').dispatchEvent(new Event('change', { bubbles: true }));
-    cell('relevant').value = '';
-    cell('relevant').dispatchEvent(new Event('change', { bubbles: true }));
-    expect(global.__LI.getCfg().jevCategoryText.relevant).toBeUndefined();
-    expect(cell('relevant').value).toBe('');
-  });
-
-  test('reset clears overrides back to empty', async () => {
-    global.__LI.setCfg({ jevCategoryText: { relevant: 'custom' } });
-    await openPanel();
-    document.querySelector('#li-ac-jev-prompt-reset').click();
-    expect(global.__LI.getCfg().jevCategoryText).toEqual({});
-    expect(cell('relevant').value).toBe('');
-    expect(saved().textContent).toMatch(/cleared/i);
-  });
-
-  test('min-confidence input clamps to 0..1, empty means default', async () => {
-    await openPanel();
-    const mc = document.querySelector('#li-ac-jev-minconf');
-    mc.value = '2.5';
-    mc.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(global.__LI.getCfg().jevMinConfidence).toBe(1);
-    mc.value = '';
-    mc.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(global.__LI.getCfg().jevMinConfidence).toBe(0.7);
-  });
-});
 
 describe('jev panel wiring', () => {
   beforeEach(() => {
@@ -120,7 +13,7 @@ describe('jev panel wiring', () => {
     global.__LI.cleanup();
     document.body.innerHTML = '';
     global.__LI.setCfg({
-      includeKeywords: [], excludeKeywords: [], jevCategoryText: {}, jevFollowKeywords: false,
+      includeKeywords: [], excludeKeywords: [], jevCategories: null, jevMode: false,
       llmProviderId: 'jev', llmEndpoints: {}, llmModels: {}, llmMinRunGapMs: 0,
     });
     global.__LI.resetLlmSession();
@@ -138,45 +31,90 @@ describe('jev panel wiring', () => {
     sendMessage({ type: 'FEED_SCAN' });
     await jest.advanceTimersByTimeAsync(500);
   }
+  const q = sel => document.querySelector(sel);
+  const rows = () => document.querySelectorAll('#li-ac-jev-cat-editor [data-cat-row]');
+  const preview = () => q('#li-ac-jev-prompt-preview');
 
-  test('invalid endpoint reverts with a status message', async () => {
+  test('editor renders one row per category with label, criteria and action', async () => {
+    global.__LI.setJevCategories([
+      { id: 'yes', label: 'relevant', criteria: 'React roles', action: 'expand' },
+      { id: 'no', label: 'java', criteria: 'Java-heavy', action: 'collapse' },
+    ]);
     await openPanel();
-    const ep = document.querySelector('#li-ac-llm-endpoint');
-    ep.value = 'http://evil.local/x';
-    ep.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(ep.value).toBe('');
-    expect(document.querySelector('#li-ac-jev-status').textContent).toMatch(/https/i);
-    expect(global.__LI.getCfg().llmEndpoints).toEqual({});
+    expect(rows().length).toBe(2);
+    expect(q('[data-cat-label="yes"]').value).toBe('relevant');
+    expect(q('[data-cat-criteria="yes"]').value).toBe('React roles');
+    expect(q('[data-cat-action="yes"]').value).toBe('expand');
+    expect(q('[data-cat-action="no"]').value).toBe('collapse');
+    // preview shows the user's buckets, not a fixed trio
+    expect(preview().textContent).toContain('- relevant: React roles');
+    expect(preview().textContent).toContain('- java: Java-heavy');
+    expect(preview().textContent).not.toContain('- excluded:');
   });
 
-  test('switching provider refreshes endpoint, model, and key help', async () => {
+  test('editing a criteria saves and refreshes the preview', async () => {
     await openPanel();
-    const sel = document.querySelector('#li-ac-llm-provider');
-    sel.value = 'openai-compat';
+    const crit = q('[data-cat-criteria="relevant"]');
+    crit.value = 'ONLY fintech React roles';
+    crit.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(global.__LI.getJevCategories()[0].criteria).toBe('ONLY fintech React roles');
+    expect(preview().textContent).toContain('ONLY fintech React roles');
+    expect(q('#li-ac-jev-saved').textContent).toMatch(/saved/i);
+  });
+
+  test('changing the action expands/collapses posts of that category', async () => {
+    global.__LI.setJevCategories([
+      { id: 'yes', label: 'relevant', criteria: '', action: 'expand' },
+      { id: 'meh', label: 'mildly matching', criteria: '', action: 'collapse' },
+    ]);
+    await openPanel();
+    const keep = makePost('kept post');
+    const hide = makePost('hidden post');
+    keep.setAttribute('data-jev-done', 'yes');
+    hide.setAttribute('data-jev-done', 'meh');
+    global.__LI.applyJevVisibilityAll();
+    expect(hide.classList.contains('li-ac-jev-concealed')).toBe(true);
+
+    const sel = q('[data-cat-action="meh"]');
+    sel.value = 'expand';
     sel.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(global.__LI.getCfg().llmProviderId).toBe('openai-compat');
-    expect(document.querySelector('#li-ac-jev-key-help').textContent).toMatch(/provider dashboard/i);
-    expect(document.querySelector('#li-ac-llm-endpoint').placeholder).toMatch(/api.openai.com/);
+    expect(global.__LI.getJevCategories().find(c => c.id === 'meh').action).toBe('expand');
+    global.__LI.applyJevVisibilityAll();
+    expect(hide.classList.contains('li-ac-jev-concealed')).toBe(false);
   });
 
-  test('key save blanks the field; clear removes the key', async () => {
+  test('add / remove / reorder from the panel', async () => {
     await openPanel();
-    const key = document.querySelector('#li-ac-jev-key');
-    key.value = 'not-a-real-key';
-    key.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(global.__LI.getLlmKey('jev')).toBe('not-a-real-key');
-    expect(key.value).toBe('');
-    expect(key.placeholder).toMatch(/saved/);
-    document.querySelector('#li-ac-jev-key-clear').click();
-    expect(global.__LI.getLlmKey('jev')).toBe('');
-    expect(key.placeholder).toMatch(/paste key/);
+    q('#li-ac-jev-cat-add').click();
+    expect(global.__LI.getJevCategories().length).toBe(2);
+    expect(rows().length).toBe(2);
+
+    const ids = global.__LI.getJevCategories().map(c => c.id);
+    q('[data-cat-remove="' + ids[1] + '"]').click();
+    expect(global.__LI.getJevCategories().length).toBe(1);
+
+    // last one cannot be removed
+    q('[data-cat-remove="' + global.__LI.getJevCategories()[0].id + '"]').click();
+    expect(global.__LI.getJevCategories().length).toBe(1);
+    expect(q('#li-ac-jev-saved').textContent).toMatch(/at least one/i);
   });
 
-  test('storage changes reflect onto minconf and category cells', async () => {
+  test('reset returns to a single default category', async () => {
+    global.__LI.setJevCategories([
+      { id: 'a', label: 'a', criteria: 'x', action: 'collapse' },
+      { id: 'b', label: 'b', criteria: 'y', action: 'expand' },
+    ]);
     await openPanel();
-    global.__onChanged({ jevMinConfidence: { newValue: 0.42 } }, 'sync');
-    expect(document.querySelector('#li-ac-jev-minconf').value).toBe('0.42');
-    global.__onChanged({ jevCategoryText: { newValue: { relevant: 'from storage' } } }, 'sync');
-    expect(document.querySelector('#li-ac-jev-cell-relevant').value).toBe('from storage');
+    q('#li-ac-jev-prompt-reset').click();
+    const cats = global.__LI.getJevCategories();
+    expect(cats.length).toBe(1);
+    expect(cats[0].action).toBe('expand');
+  });
+
+  test('storage changes re-render the editor', async () => {
+    await openPanel();
+    global.__onChanged({ jevCategories: { newValue: [{ id: 'z', label: 'zed', criteria: 'zz', action: 'collapse' }] } }, 'sync');
+    expect(q('[data-cat-row="z"]')).not.toBeNull();
+    expect(q('[data-cat-label="z"]').value).toBe('zed');
   });
 });

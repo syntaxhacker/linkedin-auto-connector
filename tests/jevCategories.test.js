@@ -40,37 +40,43 @@ function resetCfg() {
 // ---------------------------------------------------------------------------
 // 1. buildJevCategoryText — pure keyword-derived defaults
 // ---------------------------------------------------------------------------
-describe('buildJevCategoryText() — keyword-derived defaults', () => {
+describe('buildJevCategoryText() — static defaults', () => {
   test('returns exactly the three fixed keys', () => {
-    const cells = global.__LI.buildJevCategoryText({ include: [], exclude: [] });
+    const cells = global.__LI.buildJevCategoryText();
     expect(Object.keys(cells).sort()).toEqual(FIXED_KEYS);
   });
 
-  test('relevant default mentions hiring/job/role', () => {
-    const cells = global.__LI.buildJevCategoryText({ include: [], exclude: [] });
-    expect(cells.relevant).toMatch(/hiring|job|role/i);
+  test('relevant default mentions hiring/roles', () => {
+    expect(global.__LI.buildJevCategoryText().relevant).toMatch(/hiring|role/i);
   });
 
-  test('excluded default mentions not-interested / off-topic', () => {
-    const cells = global.__LI.buildJevCategoryText({ include: [], exclude: [] });
-    expect(cells.excluded).toMatch(/not interested|off.?topic/i);
+  test('excluded default mentions not-interested / not fit', () => {
+    expect(global.__LI.buildJevCategoryText().excluded).toMatch(/not interested|not fit/i);
   });
 
   test('other default is a short "anything else" string', () => {
-    const cells = global.__LI.buildJevCategoryText({ include: [], exclude: [] });
+    const cells = global.__LI.buildJevCategoryText();
     expect(cells.other).toMatch(/anything else/i);
     expect(cells.other.length).toBeLessThan(120);
   });
 
-  test('include keywords flow into relevant; exclude keywords into excluded', () => {
-    const cells = global.__LI.buildJevCategoryText({
-      include: ['react', 'senior'],
-      exclude: ['intern'],
-    });
-    expect(cells.relevant).toMatch(/react/i);
-    expect(cells.relevant).toMatch(/senior/i);
-    expect(cells.excluded).toMatch(/intern/i);
-    expect(Object.keys(cells).sort()).toEqual(FIXED_KEYS);
+  test('keywords no longer shape the category text', () => {
+    global.__LI.setCfg({ includeKeywords: ['react'], excludeKeywords: ['intern'] });
+    const cells = global.__LI.getJevCategoryCells();
+    expect(cells.relevant).not.toMatch(/react/i);
+    expect(cells.excluded).not.toMatch(/intern/i);
+  });
+});
+
+describe('seedCategoryTextFromKeywords() — one-time migration helper', () => {
+  test('builds a draft from keyword lists', () => {
+    const seeded = global.__LI.seedCategoryTextFromKeywords(['react', 'senior'], ['intern']);
+    expect(seeded.relevant).toMatch(/react/);
+    expect(seeded.excluded).toMatch(/intern/);
+  });
+
+  test('empty keyword lists seed nothing', () => {
+    expect(global.__LI.seedCategoryTextFromKeywords([], [])).toEqual({});
   });
 });
 
@@ -86,18 +92,17 @@ describe('getJevCategoryCells() — effective values', () => {
     const cells = global.__LI.getJevCategoryCells();
     expect(Object.keys(cells).sort()).toEqual(FIXED_KEYS);
     expect(cells.relevant).toMatch(/hiring|job|role/i);
-    expect(cells.excluded).toMatch(/not interested|off.?topic/i);
+    expect(cells.excluded).toMatch(/not interested|not fit/i);
     expect(cells.other).toMatch(/anything else/i);
   });
 
   test('non-blank overrides win; blank overrides fall back to defaults', () => {
     global.__LI.setCfg({
-      includeKeywords: ['react'],
       jevCategoryText: { relevant: 'ONLY senior React roles', excluded: '   ' },
     });
     const cells = global.__LI.getJevCategoryCells();
     expect(cells.relevant).toBe('ONLY senior React roles');
-    expect(cells.excluded).toMatch(/not interested|off.?topic/i);
+    expect(cells.excluded).toMatch(/not interested|not fit/i);
   });
 
   test('extra keys in cfg.jevCategoryText (e.g. unsure) are ignored', () => {
@@ -222,29 +227,25 @@ describe('getEffectiveJevPrompt() — built from cells', () => {
   });
 
   test('contains the fixed first line and the tie-break line', () => {
-    global.__LI.setCfg({ includeKeywords: ['react'] });
     const p = global.__LI.getEffectiveJevPrompt();
     expect(p.startsWith(FIXED_FIRST_LINE)).toBe(true);
     expect(p).toContain(FIXED_TIE_BREAK);
   });
 
-  test('reflects keyword-derived values on the fixed skeleton', () => {
-    global.__LI.setCfg({ includeKeywords: ['react'], excludeKeywords: ['intern'] });
+  test('uses the static defaults on the fixed skeleton', () => {
     const p = global.__LI.getEffectiveJevPrompt();
     expect(p.startsWith(FIXED_FIRST_LINE)).toBe(true);
-    expect(p).toMatch(/react/i);
-    expect(p).toMatch(/intern/i);
+    expect(p).toMatch(/hiring|role/i);
   });
 
   test('buildJevPrompt() compat wrapper equals the cells build', () => {
-    global.__LI.setCfg({ includeKeywords: ['react'], jevCategoryText: { other: 'misc' } });
+    global.__LI.setCfg({ jevCategoryText: { other: 'misc' } });
     expect(global.__LI.buildJevPrompt()).toBe(
       global.__LI.buildJevPromptFromCells(global.__LI.getJevCategoryCells())
     );
   });
 
   test('reflects a user override for relevant', () => {
-    global.__LI.setCfg({ includeKeywords: ['react'] });
     global.__LI.setJevCategoryText('relevant', 'ONLY fintech hiring posts');
     const p = global.__LI.getEffectiveJevPrompt();
     expect(p).toContain('ONLY fintech hiring posts');

@@ -42,16 +42,16 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await page.screenshot({ path: 'artifacts/jev-mode-chips.png', fullPage: false });
   });
 
-  test('prompt autofill fills relevant/excluded cells and saves', async ({ page }) => {
+  test('category cells hold standalone text and save edits', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       posts: [{ text: 'React hiring post with body' }]
     });
-    await fp.setStorage({ includeKeywords: ['react'], excludeKeywords: ['intern'], jevMode: true });
+    await fp.setStorage({ jevMode: true });
     await fp.feedScan();
 
     const relevant = page.locator('#li-ac-jev-cell-relevant');
-    await expect(relevant).toHaveValue(/react/i);
+    await expect(relevant).toHaveValue(/hiring|role/i);
     await expect(page.locator('#li-ac-jev-prompt-preview')).toContainText('Classify the quoted post into exactly one category.');
     await expect(page.locator('#li-ac-jev-prompt')).toHaveCount(0); // legacy textarea gone
     await relevant.fill('Senior fintech React only');

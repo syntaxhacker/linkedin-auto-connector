@@ -13,17 +13,16 @@ describe('jev prompt builder (compat surface)', () => {
     global.__LI.setCfg({ includeKeywords: [], excludeKeywords: [], jevCategoryText: {}, jevPrompt: '' });
   });
 
-  test('builds relevant/excluded/other categories from include/exclude keywords', () => {
+  test('categories are standalone (keyword lists do not shape them)', () => {
     global.__LI.setCfg({ includeKeywords: ['react', 'senior'], excludeKeywords: ['intern'] });
     const cats = global.__LI.buildJevCategories();
     expect(Object.keys(cats).sort()).toEqual(['excluded', 'other', 'relevant']);
-    expect(cats.relevant).toMatch(/react/i);
-    expect(cats.relevant).toMatch(/senior/i);
-    expect(cats.excluded).toMatch(/intern/i);
+    expect(cats.relevant).not.toMatch(/react/i);
+    expect(cats.excluded).not.toMatch(/intern/i);
   });
 
   test('effective prompt keeps the fixed skeleton and reflects a cell override', () => {
-    global.__LI.setCfg({ includeKeywords: ['react'], jevCategoryText: { relevant: 'fintech only' } });
+    global.__LI.setCfg({ jevCategoryText: { relevant: 'fintech only' } });
     const prompt = global.__LI.getEffectiveJevPrompt();
     expect(prompt.startsWith(global.__LI.JEV_PROMPT_FIRST_LINE)).toBe(true);
     expect(prompt).toContain(global.__LI.JEV_PROMPT_TIE_BREAK);
@@ -67,11 +66,10 @@ describe('jev category cells (manual + autofill)', () => {
     expect(preview().textContent).toContain(global.__LI.JEV_PROMPT_TIE_BREAK);
   });
 
-  test('keyword-derived values populate the cells by default', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react'], excludeKeywords: ['intern'] });
+  test('cells show the standalone defaults', async () => {
     await openPanel();
-    expect(cell('relevant').value).toMatch(/react/i);
-    expect(cell('excluded').value).toMatch(/intern/i);
+    expect(cell('relevant').value).toMatch(/hiring|role/i);
+    expect(cell('other').value).toMatch(/anything else/i);
   });
 
   test('editing a cell saves it and the preview follows', async () => {
@@ -84,32 +82,22 @@ describe('jev category cells (manual + autofill)', () => {
     expect(saved().textContent).toMatch(/saved/i);
   });
 
-  test('clearing a cell restores the keyword default', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react'] });
+  test('clearing a cell restores the default', async () => {
     await openPanel();
     cell('relevant').value = 'temp override';
     cell('relevant').dispatchEvent(new Event('change', { bubbles: true }));
     cell('relevant').value = '';
     cell('relevant').dispatchEvent(new Event('change', { bubbles: true }));
     expect(global.__LI.getCfg().jevCategoryText.relevant).toBeUndefined();
-    expect(cell('relevant').value).toMatch(/react/i);
+    expect(cell('relevant').value).toMatch(/hiring|role/i);
   });
 
-  test('autofill fills relevant/excluded from keywords and saves', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react'], excludeKeywords: ['intern'] });
-    await openPanel();
-    document.querySelector('#li-ac-jev-autofill').click();
-    expect(global.__LI.getCfg().jevCategoryText.relevant).toMatch(/react/i);
-    expect(global.__LI.getCfg().jevCategoryText.excluded).toMatch(/intern/i);
-    expect(saved().textContent).toMatch(/autofilled/i);
-  });
-
-  test('reset clears overrides back to keyword defaults', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react'], jevCategoryText: { relevant: 'custom' } });
+  test('reset clears overrides back to defaults', async () => {
+    global.__LI.setCfg({ jevCategoryText: { relevant: 'custom' } });
     await openPanel();
     document.querySelector('#li-ac-jev-prompt-reset').click();
     expect(global.__LI.getCfg().jevCategoryText).toEqual({});
-    expect(cell('relevant').value).toMatch(/react/i);
+    expect(cell('relevant').value).toMatch(/hiring|role/i);
     expect(saved().textContent).toMatch(/default/i);
   });
 
@@ -122,74 +110,6 @@ describe('jev category cells (manual + autofill)', () => {
     mc.value = '';
     mc.dispatchEvent(new Event('change', { bubbles: true }));
     expect(global.__LI.getCfg().jevMinConfidence).toBe(0.7);
-  });
-});
-
-describe('jev follow-keywords mode', () => {
-  beforeEach(() => {
-    closePanels();
-    global.__LI.cleanup();
-    document.body.innerHTML = '';
-    global.__LI.setCfg({ includeKeywords: [], excludeKeywords: [], jevCategoryText: {}, jevFollowKeywords: false, llmMinRunGapMs: 0 });
-    global.__LI.resetLlmSession();
-    global.__LI.resetLlmDaily();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-    closePanels();
-  });
-
-  async function openPanel() {
-    jest.useFakeTimers();
-    makePost('React hiring post with body text here');
-    sendMessage({ type: 'FEED_SCAN' });
-    await jest.advanceTimersByTimeAsync(500);
-  }
-  const cell = k => document.querySelector('#li-ac-jev-cell-' + k);
-  const followBox = () => document.querySelector('#li-ac-jev-follow');
-
-  test('off by default: keyword changes leave the cells at defaults', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react', 'python'] });
-    await openPanel();
-    expect(followBox().checked).toBe(false);
-    global.__LI.removeKeyword('python', 'include');
-    expect(cell('relevant').value).toMatch(/react/i);
-    expect(cell('relevant').value).not.toMatch(/python/i);
-    expect(global.__LI.getCfg().jevCategoryText.relevant).toBeUndefined();
-  });
-
-  test('enabling follow syncs relevant/excluded and tracks keyword changes', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react', 'python'] });
-    await openPanel();
-    followBox().checked = true;
-    followBox().dispatchEvent(new Event('change', { bubbles: true }));
-    expect(global.__LI.getCfg().jevFollowKeywords).toBe(true);
-    expect(cell('relevant').value).toMatch(/python/i);
-    expect(document.querySelector('#li-ac-jev-saved').textContent).toMatch(/synced/i);
-    global.__LI.removeKeyword('python', 'include');
-    expect(cell('relevant').value).not.toMatch(/python/i);
-    expect(cell('relevant').value).toMatch(/react/i);
-  });
-
-  test('focused cell draft is not clobbered by a keyword sync', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react', 'python'], jevFollowKeywords: true });
-    await openPanel();
-    cell('relevant').focus();
-    cell('relevant').value = 'Uncommitted draft edit';
-    global.__LI.removeKeyword('python', 'include');
-    expect(cell('relevant').value).toBe('Uncommitted draft edit');
-  });
-
-  test('editing a cell disables follow mode', async () => {
-    global.__LI.setCfg({ includeKeywords: ['react'], jevFollowKeywords: true });
-    await openPanel();
-    expect(followBox().checked).toBe(true);
-    cell('relevant').value = 'Manual value';
-    cell('relevant').dispatchEvent(new Event('change', { bubbles: true }));
-    expect(global.__LI.getCfg().jevFollowKeywords).toBe(false);
-    expect(followBox().checked).toBe(false);
-    expect(global.__LI.getCfg().jevCategoryText.relevant).toBe('Manual value');
   });
 });
 
@@ -251,11 +171,11 @@ describe('jev panel wiring', () => {
     expect(key.placeholder).toMatch(/paste key/);
   });
 
-  test('storage changes reflect onto follow checkbox and minconf', async () => {
+  test('storage changes reflect onto minconf and category cells', async () => {
     await openPanel();
-    global.__onChanged({ jevFollowKeywords: { newValue: true } }, 'sync');
-    expect(document.querySelector('#li-ac-jev-follow').checked).toBe(true);
     global.__onChanged({ jevMinConfidence: { newValue: 0.42 } }, 'sync');
     expect(document.querySelector('#li-ac-jev-minconf').value).toBe('0.42');
+    global.__onChanged({ jevCategoryText: { newValue: { relevant: 'from storage' } } }, 'sync');
+    expect(document.querySelector('#li-ac-jev-cell-relevant').value).toBe('from storage');
   });
 });

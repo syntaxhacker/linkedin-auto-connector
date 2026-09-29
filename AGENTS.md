@@ -90,7 +90,7 @@ dashboard work needed. Steps:
   (content.js:39). Keys: `autoExpand, scanEmails, includeKeywords,
   excludeKeywords, autoScroll, ultraHide, debug, kwSectionCollapsed,
   autoScrollDurationMin, panelMinimized, foundPanelMinimized,
-  highlightInline, highlightKeywords, jevMode, jevPrompt, jevCategoryText, jevFollowKeywords,
+  highlightInline, highlightKeywords, jevMode, jevPrompt, jevCategoryText,
   jevMinConfidence, showAdvancedTools, llmProviderId, llmEndpoints, llmModels,
   llmDailyCapPosts, llmPerMinReq, llmMinRunGapMs` (plus per-provider API keys
   in `chrome.storage.local` only — never synced, never logged, never rendered
@@ -144,12 +144,13 @@ dashboard work needed. Steps:
   Retry, live cost line. Categories use a FIXED skeleton (fixed first line,
   fixed key order relevant/excluded/other, fixed tie-break) with editable
   VALUES only: `cfg.jevCategoryText = {relevant,excluded,other}` built by
-  `buildJevCategoryText`/`getJevCategoryCells`/`buildJevPromptFromCells`;
-  blank cell = keyword-derived default, `setJevCategoryText` rejects unknown
-  keys, legacy `jevPrompt` migrates into `relevant`. Panel shows one cell per
-  key + a read-only prompt preview; Autofill fills relevant/excluded, ↺ clears
-  overrides, `jevFollowKeywords` keeps relevant/excluded synced (auto-disables
-  on manual edit). Panel groups are collapsible `<details>` with chevrons from
+  `buildJevCategoryText` (static defaults) / `getJevCategoryCells` /
+  `buildJevPromptFromCells`; blank cell = static default, `setJevCategoryText`
+  rejects unknown keys, legacy `jevPrompt` migrates into `relevant`, and
+  `seedCategoryTextFromKeywords` seeds cells once from existing keyword lists.
+  Panel shows one cell per key + a read-only prompt preview; ↺ clears
+  overrides. Keywords are now an Advanced/manual-mode input only — they no
+  longer shape the AI prompt. Panel groups are collapsible `<details>` with chevrons from
   injectStyles (auto-open when their feature is active); chip legend +
   hover-to-peek hint are in-panel; `Retry` only shows when the kill-switch is
   on; status line is severity-coloured; cost line is "Est." and hidden while

@@ -500,6 +500,43 @@ describe('llm guardrails', () => {
     expect(post.classList.contains('li-ac-jev-concealed')).toBe(false);
   });
 
+  test('relevant posts populate a simple Found list (Jev found panel)', async () => {
+    // Panel must exist: render it via a scan with Jev mode on.
+    closePanels();
+    document.body.innerHTML = '';
+    jest.useFakeTimers();
+    global.__LI.setCfg({ jevMode: true });
+    const rel = makePost('Senior React role with body text here');
+    const exc = makePost('Intern post with body text here');
+    const answers = {
+      c0: { choice: 'relevant', confidence: 0.9, probabilities: {} },
+      c1: { choice: 'excluded', confidence: 0.9, probabilities: {} },
+    };
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ answers }) }));
+    try {
+      sendMessage({ type: 'FEED_SCAN' });
+      await jest.advanceTimersByTimeAsync(500);
+      await Promise.resolve();
+      const fp = document.getElementById('li-ac-found-panel');
+      expect(fp).not.toBeNull();
+      // manual tabs hidden, relevant list populated
+      expect(fp.querySelector('#li-ac-tabbar').style.display).toBe('none');
+      const list = fp.querySelector('#li-ac-kw-list');
+      expect(list.textContent).toMatch(/relevant/i);
+      expect(list.querySelector('[data-key]')).not.toBeNull();
+      // header relabelled
+      expect(fp.querySelector('#li-ac-section-kw').textContent).toMatch(/Relevant posts/i);
+      // excluded post is not listed
+      const rows = list.querySelectorAll('[data-key]');
+      expect(rows.length).toBe(1);
+    } finally {
+      global.fetch = realFetch;
+      jest.useRealTimers();
+      global.__LI.setCfg({ jevMode: false });
+      closePanels();
+    }
+  });
+
   test('empty input returns ok without fetch', async () => {
     global.fetch = okFetch('relevant', 0.9);
     const res = await global.__LI.llmClassifyPosts([]);

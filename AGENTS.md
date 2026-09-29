@@ -151,7 +151,11 @@ dashboard work needed. Steps:
   `relevant`, and `seedCategoryTextFromKeywords` seeds cells once from the
   user's own keyword lists.
   Panel shows one cell per key + a read-only prompt preview; ↺ clears
-  overrides. Keywords are now an Advanced/manual-mode input only — they no
+  overrides. In AI mode the Found panel becomes a single "✓ Relevant posts"
+  list (renderJevFound/collectJevRelevant) — the manual Keywords/Emails/
+  Excluded tabs are hidden there; rows carry data-kind="kw" so the existing
+  click-to-scroll + seen marking still work. Keywords are now an
+  Advanced/manual-mode input only — they no
   longer shape the AI prompt. Panel groups are collapsible `<details>` with chevrons from
   injectStyles (auto-open when their feature is active); chip legend +
   hover-to-peek hint are in-panel; `Retry` only shows when the kill-switch is

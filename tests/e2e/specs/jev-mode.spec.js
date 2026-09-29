@@ -34,6 +34,10 @@ test.describe('Jev mode — AI categorize end to end', () => {
     await expect(hiddenToggle).toContainText('Peek AI-collapsed (1)');
     // Cost line tracks the session
     await expect(page.locator('#li-ac-llm-cost')).toContainText('1 req');
+    // Found panel is a simple relevant-post list (no manual tabs)
+    await expect(page.locator('#li-ac-tabbar')).toBeHidden();
+    await expect(page.locator('#li-ac-section-kw')).toContainText('Relevant posts');
+    await expect(page.locator('#li-ac-kw-list [data-key]')).toHaveCount(1);
     // Peek reveals, second click re-hides
     await hiddenToggle.click();
     await expect(hiddenToggle).toContainText('Collapse again (1)');

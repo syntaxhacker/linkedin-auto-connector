@@ -1502,6 +1502,40 @@
     if (btn) applySortButtonStyle(btn, sortNewest[kind]);
     scanFeed();
   }
+  // === Jev Found panel: a simple list of AI-classified RELEVANT posts ===
+  // The manual tabs (Keywords / Emails / Excluded) belong to the keyword
+  // pipeline, which AI mode replaces. In AI mode the panel shows one list:
+  // the posts kept visible, click a row to scroll to it.
+  function renderJevFound() {
+    if (!cfg.jevMode) return;
+    const fp = foundPanel && foundPanel.isConnected ? foundPanel : null;
+    if (!fp) return;
+    const tabbar = fp.querySelector('#li-ac-tabbar');
+    const emSec = fp.querySelector('#li-ac-section-em');
+    const hidSec = fp.querySelector('#li-ac-section-hidden');
+    const kwSec = fp.querySelector('#li-ac-section-kw');
+    const kwList = fp.querySelector('#li-ac-kw-list');
+    if (!kwList) return;
+    [tabbar, emSec, hidSec].forEach(el => { if (el) el.style.display = 'none'; });
+    if (kwSec) kwSec.style.display = 'flex';
+    const title = kwSec && kwSec.querySelector('span');
+    if (title) title.textContent = '✓ Relevant posts';
+    const sortBar = fp.querySelector('#li-ac-kw-sortbar');
+    if (sortBar) sortBar.style.display = 'none'; // feed order, no sort UI
+    // Hits are stored in kwPanelData so the existing row-click handler
+    // (scroll-to-post + seen marking) works unchanged.
+    const hits = sortedHits('kw');
+    const countEl = fp.querySelector('#li-ac-kw-count');
+    if (countEl) countEl.textContent = String(hits.length);
+    if (!hits.length) {
+      kwList.innerHTML = '<div style="color:' + BW.muted + ';padding:6px 8px;font-size:13px;">No relevant posts yet — they land here as AI classifies the feed</div>';
+      kwList.style.minHeight = '0';
+    } else {
+      kwList.innerHTML = hits.map((hit, i) => hitRowHtml(hit, i, 'kw')).join('');
+      kwList.style.minHeight = '18vh';
+    }
+  }
+
   // Active (newest-first, the default) = blue background with dark text;
   // inactive (feed order) = neutral white. Keeps the toggle state visible.
   function applySortButtonStyle(btn, active) {
@@ -2859,6 +2893,18 @@
     return n;
   }
 
+  // Snapshot the currently-visible relevant posts into the Found list shape.
+  function collectJevRelevant(posts) {
+    const arr = (posts || []).filter(p => p && p.getAttribute && p.getAttribute('data-jev-done') === 'relevant');
+    kwPanelData = arr.map(p => ({
+      el: p,
+      key: postKey(p),
+      keywords: ['relevant'],
+      emails: [],
+    }));
+    arr.forEach(p => ensureMeta('kw', postKey(p)));
+  }
+
   function updateJevStatus(text, kind) {
     const st = document.getElementById('li-ac-jev-status');
     if (st) {
@@ -3215,6 +3261,8 @@
         // completed batches must still count (budget, throttle, cost line).
         noteLlmSuccess(1, batch.length);
       }
+      collectJevRelevant(posts);
+      renderJevFound();
       updateJevStatus('Categorized ' + done + ' post(s) via ' + prov.label + '.');
       updateLlmCostLine();
       return { status: 'ok', count: done };
@@ -3240,6 +3288,9 @@
 
   function jevReset() {
     jevCategorized.clear();
+    kwPanelData = [];
+    const fpReset = foundPanel && foundPanel.isConnected ? foundPanel : null;
+    if (fpReset) renderJevFound();
     jevShowConcealed = false;
     document.querySelectorAll('.' + JEV_CHIP_CLS).forEach(el => el.remove());
     document.querySelectorAll('.' + JEV_PENDING_CLS).forEach(el => el.classList.remove(JEV_PENDING_CLS));
@@ -3917,7 +3968,7 @@
     JEV_FIXED_KEYS, JEV_PROMPT_FIRST_LINE, JEV_PROMPT_TIE_BREAK,
     jevUnseenPosts, jevClassifyPosts, llmClassifyPosts, jevReset, applyJevChip, markJevPending, JEV_PENDING_CLS, updateJevStatus,
     setJevApiKey, getJevApiKey, setLlmKey, getLlmKey, migrateLegacyLlmKeys,
-    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, seedCategoryTextFromKeywords, parseJevPromptIntoCells, looksLikeFullPrompt, JEV_CATEGORY_PLACEHOLDERS, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
+    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, renderJevFound, collectJevRelevant, seedCategoryTextFromKeywords, parseJevPromptIntoCells, looksLikeFullPrompt, JEV_CATEGORY_PLACEHOLDERS, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,

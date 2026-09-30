@@ -62,6 +62,29 @@ describe('jev panel wiring', () => {
     expect(q('#li-ac-jev-saved').textContent).toMatch(/saved/i);
   });
 
+  test('changing a category action re-applies visibility to classified posts', async () => {
+    global.__LI.setJevCategories([
+      { id: 'meh', label: 'mildly matching', criteria: '', action: 'expand' },
+    ]);
+    await openPanel();
+    const post = makePost('already classified post');
+    post.setAttribute('data-jev-done', 'meh'); // classified before the change
+    global.__LI.applyJevVisibilityAll();
+    expect(post.classList.contains('li-ac-jev-concealed')).toBe(false);
+
+    // switch the bucket to Collapse from the panel — the existing post must collapse now
+    const sel = q('[data-cat-action="meh"]');
+    sel.value = 'collapse';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(post.classList.contains('li-ac-jev-concealed')).toBe(true);
+
+    // and back to Expand re-opens it (the editor re-renders, so re-query)
+    const sel2 = q('[data-cat-action="meh"]');
+    sel2.value = 'expand';
+    sel2.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(post.classList.contains('li-ac-jev-concealed')).toBe(false);
+  });
+
   test('changing the action expands/collapses posts of that category', async () => {
     global.__LI.setJevCategories([
       { id: 'yes', label: 'relevant', criteria: '', action: 'expand' },

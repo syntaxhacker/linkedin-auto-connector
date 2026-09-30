@@ -2154,8 +2154,12 @@
         setJevCategories(list);
         chrome.storage.sync.set({ jevCategories: cfg.jevCategories });
         renderJevCategoryEditor(panel);
-      renderJevEditorFn = renderJevCategoryEditor;
+        renderJevEditorFn = renderJevCategoryEditor;
         renderJevPreview();
+        // Already-classified posts are skipped by classification, so apply the
+        // new Expand/Collapse actions to them right away.
+        applyJevVisibilityAll();
+        renderJevFound();
         markJevPromptSaved('✓ ' + (note || 'saved'));
         scanFeed();
       }
@@ -4042,6 +4046,8 @@
     if (changes.jevCategories) {
       cfg.jevCategories = normalizeJevCategories(cfg.jevCategories);
       if (panel && renderJevEditorFn) renderJevEditorFn(panel);
+      applyJevVisibilityAll();
+      renderJevFound();
     }
     if (changes.highlightKeywords) {
       let v = changes.highlightKeywords.newValue;

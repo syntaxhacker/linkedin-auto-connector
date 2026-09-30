@@ -9,6 +9,7 @@ const { makePost, sendMessage, closePanels } = require('./helpers');
 
 describe('jev panel wiring', () => {
   beforeEach(() => {
+    global.__LI.clearJevCache();
     closePanels();
     global.__LI.cleanup();
     document.body.innerHTML = '';

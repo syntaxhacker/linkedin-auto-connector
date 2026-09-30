@@ -39,6 +39,7 @@ describe('llm guardrails', () => {
     global.__LI.resetLlmSession();
     global.__LI.resetLlmDaily();
     global.__LI.jevReset();
+    global.__LI.clearJevCache();
     global.__LI.setJevApiKey('test-key-123');
   });
 
@@ -601,6 +602,52 @@ describe('llm guardrails', () => {
       global.__LI.setCfg({ jevMode: false });
       closePanels();
     }
+  });
+
+  test('cached verdicts are reused instead of calling the API again', async () => {
+    closePanels();
+    document.body.innerHTML = '';
+    jest.useFakeTimers();
+    global.__LI.setCfg({ jevMode: true, llmMinRunGapMs: 0 });
+    const post = makePost('Same post that shows up in another search entirely');
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true, json: () => Promise.resolve({ answers: { c0: { choice: 'relevant', confidence: 0.9, probabilities: {} } } }),
+    }));
+    try {
+      await global.__LI.llmClassifyPosts([post]);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      // Simulate a fresh page/tab: new node, same post content, no session memos.
+      post.remove();
+      global.__LI.jevReset();
+      const again = makePost('Same post that shows up in another search entirely');
+      // cache survived jevReset (only RESET clears it)
+      const applied = global.__LI.applyJevCacheToPosts([again]);
+      expect(applied).toBe(1);
+      const chip = again.querySelector('.li-ac-jev-chip');
+      expect(chip.getAttribute('data-jev-category')).toBe('relevant');
+      // nothing left to classify → no further API call
+      const res = await global.__LI.llmClassifyPosts([again]);
+      expect(res.count).toBe(0);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      global.fetch = realFetch;
+      jest.useRealTimers();
+      global.__LI.clearJevCache();
+      global.__LI.setCfg({ jevMode: false });
+      closePanels();
+    }
+  });
+
+  test('cache ignores verdicts for categories that no longer exist', async () => {
+    global.__LI.setCfg({ jevCategories: [{ id: 'relevant', label: 'relevant', criteria: '', action: 'expand' }] });
+    global.__LI.jevCacheRemember('k1', 'deleted-bucket', 0.9);
+    expect(global.__LI.jevCacheGet('k1')).toBeNull();
+    global.__LI.jevCacheRemember('k2', 'relevant', 0.9);
+    expect(global.__LI.jevCacheGet('k2').cat).toBe('relevant');
+    // unsure is never cached (worth retrying)
+    global.__LI.jevCacheRemember('k3', 'unsure', 0.1);
+    expect(global.__LI.jevCacheGet('k3')).toBeNull();
   });
 
   test('empty input returns ok without fetch', async () => {

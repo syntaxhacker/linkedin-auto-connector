@@ -38,6 +38,7 @@ describe('jev classify', () => {
     global.__LI.resetLlmSession();
     global.__LI.resetLlmDaily();
     global.__LI.jevReset();
+    global.__LI.clearJevCache();
     global.__LI.setJevApiKey('test-key-123');
   });
 

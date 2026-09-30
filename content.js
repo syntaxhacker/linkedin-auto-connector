@@ -2903,6 +2903,73 @@
   // Unseen = has body text, not cleared-seen, not viewed, not yet categorized.
   // Categorized posts carry a data-jev-done attribute (postKey alone is not
   // stable: prepending the chip changes textContent, which postKey reads).
+  // === Persistent classification cache (chrome.storage.local) ===
+  // The same post shows up in many searches/tabs; postKey is stable for it, so
+  // a cached verdict avoids paying for the same classification twice.
+  const JEV_CACHE_KEY = 'jevCache';
+  const JEV_CACHE_CAP = 3000;
+  const JEV_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+  let jevCache = {}; // key -> { cat, conf, ts }
+  let jevCacheSaveTimer = null;
+
+  function jevCacheValid(entry) {
+    if (!entry || typeof entry !== 'object') return false;
+    if (!entry.cat || entry.cat === 'unsure') return false; // unsure is worth retrying
+    if (entry.cat !== 'unsure' && !jevCategoryById(entry.cat)) return false; // bucket gone
+    if (entry.ts && (Date.now() - entry.ts) > JEV_CACHE_TTL_MS) return false;
+    return true;
+  }
+  function jevCacheGet(key) {
+    const e = jevCache[key];
+    return jevCacheValid(e) ? e : null;
+  }
+  function jevCachePrune() {
+    const entries = Object.keys(jevCache).map(k => [k, jevCache[k]]).filter(kv => jevCacheValid(kv[1]));
+    entries.sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+    const keep = entries.slice(0, JEV_CACHE_CAP);
+    const next = {};
+    keep.forEach(kv => { next[kv[0]] = kv[1]; });
+    jevCache = next;
+  }
+  function jevCacheRemember(key, cat, conf) {
+    if (!key || !cat) return;
+    jevCache[key] = { cat, conf: Number(conf) || 0, ts: Date.now() };
+    if (jevCacheSaveTimer) clearTimeout(jevCacheSaveTimer);
+    jevCacheSaveTimer = setTimeout(() => {
+      jevCacheSaveTimer = null;
+      jevCachePrune();
+      try { chrome.storage.local.set({ [JEV_CACHE_KEY]: jevCache }); } catch (_) {}
+    }, 1000);
+  }
+  function loadJevCache(cb) {
+    try {
+      chrome.storage.local.get({ [JEV_CACHE_KEY]: {} }, res => {
+        jevCache = (res && res[JEV_CACHE_KEY] && typeof res[JEV_CACHE_KEY] === 'object') ? res[JEV_CACHE_KEY] : {};
+        jevCachePrune();
+        if (typeof cb === 'function') cb();
+      });
+    } catch (_) { if (typeof cb === 'function') cb(); }
+  }
+  function clearJevCache() {
+    jevCache = {};
+    try { chrome.storage.local.set({ [JEV_CACHE_KEY]: {} }); } catch (_) {}
+  }
+  // Apply cached verdicts to posts that have no verdict yet — no API involved.
+  function applyJevCacheToPosts(posts) {
+    let hits = 0;
+    (posts || []).forEach(p => {
+      if (!p || !p.isConnected) return;
+      if (p.hasAttribute && p.hasAttribute('data-jev-done')) return;
+      const key = postKey(p);
+      const e = key ? jevCacheGet(key) : null;
+      if (!e) return;
+      applyJevChip(p, e.cat, e.conf);
+      jevCategorized.add(key);
+      hits++;
+    });
+    return hits;
+  }
+
   function jevUnseenPosts(posts) {
     return (posts || []).filter(p => {
       if (!p || !p.isConnected) return false;
@@ -3447,6 +3514,8 @@
             try { it.el.removeAttribute('data-jev-done'); } catch (_) {}
             return;
           }
+          // Cache only confident results; 'unsure' is retried next time.
+          if (decided.cat && decided.cat !== 'unsure') jevCacheRemember(it.key, decided.cat, decided.conf);
           jevRemember(it.key);
           done++;
         });
@@ -3528,6 +3597,9 @@
           posts = getPosts(); // re-grab after unhide
           renderPanel([], []);
           applyViewedBorders(posts);
+          // Cached verdicts (same post seen in another search/tab) are applied
+          // instantly, so only genuinely new posts cost an API call.
+          applyJevCacheToPosts(posts);
           markJevPending(posts);
           jevClassifyPosts(posts).catch(() => {});
           return;
@@ -3828,6 +3900,7 @@
       knownEmails.clear(); // forget jumped-to emails so they can be re-centered
       knownKeywordKeys.clear();
       jevReset(); // forget categorized posts + remove chips
+      clearJevCache(); // full reset also drops the persistent cache
       resetLlmSession(); // clear guardrail counters/kill (daily usage survives)
       cfg.jevMode = false;
       resetHitMeta(); // forget viewed/firstSeen
@@ -4014,6 +4087,7 @@
           }
         }, 500);
       }
+      loadJevCache();
       startFeedObserver();
       injectStyles();
       hideRightRail();
@@ -4169,7 +4243,7 @@
     looksLikeLegacyPrompt, parseLegacyPromptCells, seedCategoryTextFromKeywords,
     jevUnseenPosts, jevClassifyPosts, llmClassifyPosts, jevReset, applyJevChip, markJevPending, JEV_PENDING_CLS, updateJevStatus,
     setJevApiKey, getJevApiKey, setLlmKey, getLlmKey, migrateLegacyLlmKeys,
-    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, renderJevFound, collectJevRelevant, jevRelevantHits, seedCategoryTextFromKeywords, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
+    canClassify, noteLlmSuccess, noteLlmFailure, getLlmStats, clearLlmKill, resetLlmSession, resetLlmDaily, handleLlmLocalLoad, getLlmTransport, isDefaultLlmHost, resolveJevCategory, jevConcealedCount, applyJevVisibilityAll, applyAdvancedVisibility, renderJevFound, collectJevRelevant, jevRelevantHits, applyJevCacheToPosts, jevCacheRemember, jevCacheGet, clearJevCache, loadJevCache, JEV_CACHE_KEY, JEV_CACHE_CAP, seedCategoryTextFromKeywords, migrateLlmDefaults, LLM_LIMITS_ENABLED, llmPost,
     sortedHits, sortNewest, setSectionBarVisible, getKwSectionCollapsed, setKwSectionCollapsed, toggleKwSection,
     getPanelMinimized, setPanelMinimized, togglePanelMinimize,
     getFoundPanelMinimized, setFoundPanelMinimized, toggleFoundPanelMinimize,

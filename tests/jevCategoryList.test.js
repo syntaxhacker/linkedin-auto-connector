@@ -10,6 +10,7 @@ const FIXED_FIRST_LINE = 'Classify the quoted post into exactly one category.';
 
 describe('jev categories — user-owned model', () => {
   beforeEach(() => {
+    global.__LI.clearJevCache();
     global.__LI.setCfg({ jevCategories: undefined, jevCategoryText: {} });
   });
 

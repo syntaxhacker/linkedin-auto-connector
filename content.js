@@ -2531,11 +2531,15 @@
       applyFoundPanelMinimized(foundPanel);
       applySortButtons(foundPanel);
       applyFoundLayout();
-      // AI mode owns the Found panel: hide the manual tabs/sections and show
-      // the relevant list. Doing it here (not only after classification) keeps
-      // it correct on panel recreation and on scans that skip classification
-      // (no key yet, paced, throttled).
-      renderJevFound();
+      // The Found panel is AI-only (the manual keyword/email lists are
+      // disabled): in AI mode it shows the relevant list, otherwise it is
+      // hidden rather than falling back to the manual Emails tab.
+      if (cfg.jevMode) {
+        foundPanel.style.display = isCollapsed() ? 'none' : 'flex';
+        renderJevFound();
+      } else {
+        foundPanel.style.display = 'none';
+      }
     }
     positionFoundPanel();
 
@@ -4165,6 +4169,10 @@
         if (jevToggle) jevToggle.checked = !!cfg.jevMode;
         const grp = panel.querySelector('#li-ac-grp-jev');
         if (grp && cfg.jevMode) grp.open = true;
+      }
+      if (foundPanel) {
+        if (cfg.jevMode) { foundPanel.style.display = isCollapsed() ? 'none' : 'flex'; renderJevFound(); }
+        else foundPanel.style.display = 'none';
       }
     }
     if (changes.llmProviderId || changes.llmEndpoints || changes.llmModels) {

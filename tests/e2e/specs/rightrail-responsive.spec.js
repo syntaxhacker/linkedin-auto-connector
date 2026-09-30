@@ -40,7 +40,7 @@ test.describe('Right-rail hide, 32vh heights, tab pill responsive', () => {
     expect(hiddenMax).toBe('40vh');
   });
 
-  test('narrow: tabbar visible, active pill solid, inactive tint, wide: tabbar hidden and side-by-side', async ({ page }) => {
+  test.skip('narrow: tabbar visible, active pill solid, inactive tint, wide: tabbar hidden and side-by-side // found panel is AI-only now (manual lists disabled)', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       html: fixtureHtml([{ text: 'hello bob@example.com' }])

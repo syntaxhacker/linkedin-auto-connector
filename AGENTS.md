@@ -173,7 +173,9 @@ dashboard work needed. Steps:
   list (renderJevFound + the persistent jevRelevantStore/jevRelevantHits, so a
   scan that skips classification cannot blank it) — the manual Keywords/Emails/
   Excluded tabs are hidden there; rows carry data-kind="kw" so the existing
-  click-to-scroll + seen marking still work. Keywords are now an
+  click-to-scroll + seen marking still work. The panel is AI-ONLY: when
+  `cfg.jevMode` is off it is hidden entirely (the manual Emails tab is no
+  longer reachable), toggled live from `onChanged`. Keywords are now an
   Advanced/manual-mode input only — they no
   longer shape the AI prompt. Panel groups are collapsible `<details>` with chevrons from
   injectStyles (auto-open when their feature is active); chip legend +

@@ -171,6 +171,13 @@ describe('jev panel wiring', () => {
     expect(q('#li-ac-autoscroll').checked).toBe(false);
   });
 
+  test('found panel is hidden entirely when AI mode is off', async () => {
+    global.__LI.setCfg({ jevMode: false });
+    await openPanel();
+    const found = document.getElementById('li-ac-found-panel');
+    expect(found.style.display).toBe('none');
+  });
+
   test('endpoint and model inputs are hidden for now', async () => {
     await openPanel();
     const adv = q('#li-ac-llm-advanced');

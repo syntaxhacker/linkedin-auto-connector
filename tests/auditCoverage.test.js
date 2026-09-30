@@ -401,10 +401,10 @@ describe('tab pill styling — exhaustive', () => {
     expect(() => global.__LI.applyFoundLayout()).not.toThrow();
   });
 
-  test('positioning: found panel right offset is 348px', async () => {
+  test('positioning: found panel right offset leaves a gap (386px)', async () => {
     await scan();
     const found = document.getElementById('li-ac-found-panel');
-    expect(found.style.right).toBe('348px');
+    expect(found.style.right).toBe('386px'); // 16 + panel(360) + gap(10)
   });
 
   test('section backgrounds use tinted rgba', async () => {

@@ -370,7 +370,7 @@ describe('two-panel layout (control + found)', () => {
     const found = document.getElementById('li-ac-found-panel');
     expect(panel).not.toBeNull();
     expect(found).not.toBeNull();
-    expect(found.style.right).toBe('348px');
+    expect(found.style.right).toBe('386px'); // 16 + panel(360) + gap(10)
     // Control panel keeps the keyword inputs; found panel has the lists.
     expect(panel.querySelector('#li-ac-kw-include')).not.toBeNull();
     expect(found.querySelector('#li-ac-kw-list')).not.toBeNull();
@@ -410,7 +410,7 @@ describe('two-panel layout (control + found)', () => {
   test('found panel stays offset from the control panel (both always present)', async () => {
     await open();
     const found = document.getElementById('li-ac-found-panel');
-    expect(found.style.right).toBe('348px');
+    expect(found.style.right).toBe('386px'); // 16 + panel(360) + gap(10)
     expect(document.getElementById('li-ac-panel')).not.toBeNull();
   });
 

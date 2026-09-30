@@ -149,6 +149,27 @@ describe('jev panel wiring', () => {
     expect(global.__LI.getJevCategories()[0].criteria).toBe('wrapped criteria text');
   });
 
+  test('focus and caret survive the editor re-render while typing', async () => {
+    await openPanel();
+    const ta = q('[data-cat-criteria="relevant"]');
+    ta.focus();
+    ta.value = 'typing in progress';
+    ta.dispatchEvent(new Event('change', { bubbles: true })); // triggers re-render
+    const after = q('[data-cat-criteria="relevant"]');
+    expect(document.activeElement).toBe(after);
+    expect(after.value).toBe('typing in progress');
+  });
+
+  test('interacting with the panel releases the page scroll pin / auto-scroll', async () => {
+    global.__LI.setCfg({ autoScroll: true });
+    await openPanel();
+    const before = q('#li-ac-autoscroll').checked;
+    q('#li-ac-jev-cat-editor').dispatchEvent(new Event('focusin', { bubbles: true }));
+    expect(before).toBe(true);
+    expect(global.__LI.getCfg().autoScroll).toBe(false);
+    expect(q('#li-ac-autoscroll').checked).toBe(false);
+  });
+
   test('endpoint and model inputs are hidden for now', async () => {
     await openPanel();
     const adv = q('#li-ac-llm-advanced');

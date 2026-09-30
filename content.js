@@ -1850,8 +1850,10 @@
   function positionFoundPanel() {
     if (!foundPanel) return;
     // The control panel never closes (minimize only), so the found panel is
-    // always offset to its left.
-    foundPanel.style.right = '348px';
+    // offset to its left with a real gap (panel width + margin), measured so
+    // the two never touch/overlap after a width change.
+    const panelW = (panel && panel.getBoundingClientRect && panel.getBoundingClientRect().width) || 360;
+    foundPanel.style.right = Math.round(16 + panelW + 10) + 'px';
     // Wide layout needs a wider panel to show columns side-by-side.
     if (isFoundWide() && foundPanel.style.display !== 'none') {
       foundPanel.style.width = '680px';
@@ -2015,6 +2017,14 @@
           '</label>' +
           '</div>';
       document.body.appendChild(panel);
+      // Any interaction with our panels releases LinkedIn's scroll pin, so the
+      // page can't yank the viewport (and the caret) while typing.
+      ['focusin', 'pointerdown', 'wheel'].forEach(evt => {
+        panel.addEventListener(evt, () => {
+          try { if (typeof releaseFn === 'function') releaseFn(); } catch (_) {}
+          disableAutoScrollQuiet();
+        }, true);
+      });
       const toggle = panel.querySelector('#li-ac-autoscroll');
       toggle.addEventListener('change', () => {
         cfg.autoScroll = toggle.checked;
@@ -2129,6 +2139,18 @@
         const root = scope || panel;
         const host = root && root.querySelector ? root.querySelector('#li-ac-jev-cat-editor') : null;
         if (!host) return;
+        // Remember what the user was typing so a re-render doesn't steal focus
+        // or move the caret (this fires on every save/scan).
+        let focusKey = null, focusSel = null;
+        try {
+          const a = document.activeElement;
+          if (a && host.contains(a)) {
+            focusKey = ['data-cat-label', 'data-cat-criteria', 'data-cat-color']
+              .map(at => (a.getAttribute(at) ? at + '=' + a.getAttribute(at) : null))
+              .filter(Boolean)[0] || null;
+            if (typeof a.selectionStart === 'number') focusSel = [a.selectionStart, a.selectionEnd];
+          }
+        } catch (_) {}
         const cats = getJevCategories();
         host.innerHTML = cats.map((c, i) => {
           const expand = c.action === 'expand';
@@ -2149,6 +2171,16 @@
             '</div>' +
           '</div>';
         }).join('');
+        // Restore focus + caret that the innerHTML rewrite above destroyed.
+        if (focusKey) {
+          try {
+            const el = host.querySelector('[' + focusKey + ']');
+            if (el) {
+              el.focus();
+              if (focusSel && typeof el.setSelectionRange === 'function') el.setSelectionRange(focusSel[0], focusSel[1]);
+            }
+          } catch (_) {}
+        }
         // Auto-grow the criteria boxes to fit their content (manual resize still works).
         host.querySelectorAll('textarea[data-cat-criteria]').forEach(t => {
           const grow = () => { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, Math.round((window.innerHeight || 800) * 0.4)) + 'px'; };
@@ -3655,6 +3687,19 @@
   // Turn auto-scroll OFF permanently (used when the user clicks a panel result
   // to inspect it — otherwise the interval would resume and scroll away after
   // the click lock expires). Persists the change and syncs the panel toggle.
+  // Stop auto-scroll without the persistence/toggle side effects of
+  // disableAutoScroll (used when the user starts typing in the panel).
+  function disableAutoScrollQuiet() {
+    if (!cfg.autoScroll) return;
+    cfg.autoScroll = false;
+    stopAutoScroll();
+    scrollLock.reset();
+    if (panel) {
+      const t = panel.querySelector('#li-ac-autoscroll');
+      if (t) t.checked = false;
+    }
+  }
+
   function disableAutoScroll() {
     cfg.autoScroll = false;
     stopAutoScroll();

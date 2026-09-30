@@ -187,6 +187,13 @@ dashboard work needed. Steps:
 - **URL gate** → extension works on `/search`, `/feed`, `/jobs/search`, and
   `/company/*/people/`; elsewhere both panels show a blurred notice
   (`applyGateOverlays`).
+- **Panel gap**: `positionFoundPanel()` offsets the found panel by
+  `16 + control-panel width + 10` (measured, so widening the control panel
+  can't overlap it).
+- **Typing safety**: `focusin`/`pointerdown`/`wheel` inside the control panel
+  release the page scroll pin and stop auto-scroll (`disableAutoScrollQuiet`),
+  so the page can't yank the viewport/caret while you type;
+  `renderJevCategoryEditor` also preserves focus + caret across its re-render.
 - **Panels never close** → there is no ✕ close button. Both panels collapse
   into a single messenger-style floating bubble (`#li-ac-bubble`, 56px circle);
   clicking the bubble expands both. RESET removes everything. While LinkedIn's

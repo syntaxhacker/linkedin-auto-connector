@@ -22,7 +22,7 @@ test.describe('Right-rail hide, 32vh heights, tab pill responsive', () => {
     expect(css).toContain('display: none !important');
   });
 
-  test('kw/em lists 32vh when populated, hidden 40vh cap', async ({ page }) => {
+  test.skip('kw/em lists 32vh when populated, hidden 40vh cap // keywords disabled (AI categorize replaces them)', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       html: fixtureHtml([

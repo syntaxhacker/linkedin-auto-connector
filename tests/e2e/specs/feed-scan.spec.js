@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 const { LinkedInFeedPage, fixtureHtml } = require('../pages/LinkedInFeedPage');
 
 test.describe('Feed scanning — keyword/email panels', () => {
-  test('include keyword highlights and renders under Emails when post has email', async ({ page }) => {
+  test.skip('include keyword highlights and renders under Emails when post has email // keywords disabled (AI categorize replaces them)', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       html: fixtureHtml([
@@ -26,7 +26,7 @@ test.describe('Feed scanning — keyword/email panels', () => {
     await page.screenshot({ path: 'artifacts/feed-scan-keyword-email.png', fullPage: false });
   });
 
-  test('keyword-only post appears under Keywords', async ({ page }) => {
+  test.skip('keyword-only post appears under Keywords // keywords disabled (AI categorize replaces them)', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/search/results/people/', {
       html: fixtureHtml([{ text: 'React senior role, no contact details here' }])

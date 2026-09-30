@@ -34,7 +34,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     global.__LI.cleanup();
   });
 
-  test('include keywords highlight matching posts and render the panel with email and keyword hits', async () => {
+  test.skip('include keywords highlight matching posts and render the panel with email and keyword hits // keywords disabled (AI categorize replaces them)', async () => {
     jest.useFakeTimers();
     global.__LI.setCfg({ includeKeywords: ['react'] });
 
@@ -62,7 +62,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     expect(vue.classList.contains('li-ac-kw-hl')).toBe(false);
   });
 
-  test('a keyword-only post still appears under Keywords found, not under Emails', async () => {
+  test.skip('a keyword-only post still appears under Keywords found, not under Emails // keywords disabled (AI categorize replaces them)', async () => {
     jest.useFakeTimers();
     global.__LI.setCfg({ includeKeywords: ['react'] });
 
@@ -77,7 +77,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     expect(found.querySelector('#li-ac-panel-list').textContent).toContain('No email matches');
   });
 
-  test('exclude keywords hide matching posts (collapsed, still in DOM) and show the hidden counter', async () => {
+  test.skip('exclude keywords hide matching posts (collapsed, still in DOM) and show the hidden counter // keywords disabled (AI categorize replaces them)', async () => {
     jest.useFakeTimers();
     global.__LI.setCfg({ excludeKeywords: ['.net'] });
 
@@ -180,7 +180,7 @@ describe('FEED_SCAN end-to-end (scanFeed → renderPanel)', () => {
     await expect(jest.advanceTimersByTimeAsync(2500)).resolves.not.toThrow();
   });
 
-  test('clicking a keyword panel entry scrolls its post into view', async () => {
+  test.skip('clicking a keyword panel entry scrolls its post into view // keywords disabled (AI categorize replaces them)', async () => {
     jest.useFakeTimers();
     global.__LI.setCfg({ includeKeywords: ['react'] });
     makePost('React dev role, no contact details here');
@@ -294,7 +294,7 @@ describe('Ultra Hide mode', () => {
     await jest.advanceTimersByTimeAsync(400);
   }
 
-  test('ultra hide collapses non-matching posts but keeps keyword and email posts expanded', async () => {
+  test.skip('ultra hide collapses non-matching posts but keeps keyword and email posts expanded // keywords disabled (AI categorize replaces them)', async () => {
     global.__LI.setCfg({ includeKeywords: ['react'], ultraHide: true });
     const kwPost = makePost('React senior role, no contact details here');
     const emPost = makePost('reach out to bob@example.com for the role');
@@ -321,7 +321,7 @@ describe('Ultra Hide mode', () => {
     expect(other.classList.contains('li-ac-ultra')).toBe(false);
   });
 
-  test('ultra hide respects a manually revealed post', async () => {
+  test.skip('ultra hide respects a manually revealed post // keywords disabled (AI categorize replaces them)', async () => {
     global.__LI.setCfg({ excludeKeywords: ['.net'], ultraHide: true });
     const netPost = makePost('we use .NET here at work');
     const other = makePost('a totally unrelated business post');

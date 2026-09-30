@@ -329,6 +329,9 @@
       '#li-ac-panel button:focus-visible, #li-ac-panel input:focus-visible, #li-ac-panel select:focus-visible, #li-ac-panel textarea:focus-visible, #li-ac-panel summary:focus-visible, #li-ac-found-panel button:focus-visible { outline: 2px solid ' + C.focus + ' !important; outline-offset: 1px; }' +
       // Touch targets: keep small controls at >=24px tall.
       '#li-ac-panel button, #li-ac-found-panel button { min-height: 26px; }' +
+      // Keywords are disabled: hide their group and the keyword/excluded tabs
+      // (the Emails tab and the AI "Relevant posts" list stay).
+      '#li-ac-grp-kw, #li-ac-tab-kw, #li-ac-tab-hidden, #li-ac-section-hidden { display: none !important; }' +
       '#li-ac-panel textarea { resize: vertical; }' +
       '#li-ac-jev-cat-editor textarea { resize: vertical; }' +
       '#li-ac-jev-cat-editor input, #li-ac-jev-cat-editor select, #li-ac-jev-cat-editor textarea { font-family: inherit; }' +
@@ -3465,9 +3468,12 @@
           jevClassifyPosts(posts).catch(() => {});
           return;
         }
-        filterPosts(posts);
-        posts = getPosts(); // re-grab after filtering (hidden posts excluded)
-        kwHits = scanKeywords(posts);
+        // === Keywords are DISABLED (AI categorize replaces them). The code
+        // below is kept for reference/rollback — re-enable to restore the
+        // keyword pipeline.
+        // filterPosts(posts);
+        // posts = getPosts(); // re-grab after filtering (hidden posts excluded)
+        // kwHits = scanKeywords(posts);
         emHits = cfg.scanEmails ? scanEmails(posts) : [];
         // Independent highlight words — on all allowed pages (Jobs + Feed/Search), JD only on Jobs
         const hlItems = normalizeHighlightItems(cfg.highlightKeywords);
@@ -3505,7 +3511,7 @@
       // A post that matches keywords AND yields an email is shown only under
       // Emails found — never duplicated under Keywords found.
       const emKeys = new Set(emHits.map(h => h.key));
-      const kwFiltered = kwHits.filter(h => !emKeys.has(h.key));
+      const kwFiltered = []; // keywords disabled
       renderPanel(emHits, kwFiltered);
       // Ultra Hide: collapse every post except keyword/email matches.
       applyUltraHide(kwFiltered, emHits);
@@ -3846,9 +3852,11 @@
           let legacy = cfg.jevCategoryText && typeof cfg.jevCategoryText === 'object' ? Object.assign({}, cfg.jevCategoryText) : {};
           const blob = ['relevant', 'excluded', 'other'].map(k => legacy[k] || '').find(t => looksLikeLegacyPrompt(t));
           if (blob) legacy = parseLegacyPromptCells(blob);
-          if (!['relevant', 'excluded', 'other'].some(k => String(legacy[k] || '').trim())) {
-            legacy = seedCategoryTextFromKeywords(cfg.includeKeywords, cfg.excludeKeywords);
-          }
+          // Keywords disabled → no keyword seed. Re-enable to seed from the
+          // user's old include/exclude lists.
+          // if (!['relevant', 'excluded', 'other'].some(k => String(legacy[k] || '').trim())) {
+          //   legacy = seedCategoryTextFromKeywords(cfg.includeKeywords, cfg.excludeKeywords);
+          // }
           if (cfg.jevPrompt && !['relevant', 'excluded', 'other'].some(k => String(legacy[k] || '').trim())) {
             legacy.relevant = cfg.jevPrompt;
           }

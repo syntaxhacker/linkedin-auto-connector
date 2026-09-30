@@ -6,7 +6,11 @@
 const MENU_INCLUDE = 'li-ac-add-include';
 const MENU_EXCLUDE = 'li-ac-add-exclude';
 
+// Keywords are DISABLED (AI categorize replaces them): the right-click
+// "Add to Include/Exclude keywords" menu is not registered. Kept for rollback.
 function ensureMenu() {
+  return;
+  // eslint-disable-next-line no-unreachable
   try {
     chrome.contextMenus.create({
       id: MENU_INCLUDE,

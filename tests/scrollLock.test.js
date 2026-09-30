@@ -227,7 +227,7 @@ describe('auto-jump fires only for NEW emails', () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
-  test('jumps for a keyword-only hit when no emails are present', async () => {
+  test.skip('jumps for a keyword-only hit when no emails are present // keywords disabled (AI categorize replaces them)', async () => {
     jest.useFakeTimers();
     global.__LI.setCfg({ autoScroll: true, includeKeywords: ['react'] });
     const post = makePost('React Developer opening');

@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 const { LinkedInFeedPage, fixtureHtml } = require('../pages/LinkedInFeedPage');
 
 test.describe('Hidden / Ultra hide flows', () => {
-  test('exclude keyword hides matching post and appears in Hidden list with Show', async ({ page }) => {
+  test.skip('exclude keyword hides matching post and appears in Hidden list with Show // keywords disabled (AI categorize replaces them)', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       html: fixtureHtml([
@@ -33,7 +33,7 @@ test.describe('Hidden / Ultra hide flows', () => {
     expect(hiddenAfter).toBe(0);
   });
 
-  test('ultra hide collapses non-matching posts, keeps matches expanded', async ({ page }) => {
+  test.skip('ultra hide collapses non-matching posts, keeps matches expanded // keywords disabled (AI categorize replaces them)', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       html: fixtureHtml([
@@ -52,7 +52,7 @@ test.describe('Hidden / Ultra hide flows', () => {
     await expect(fp.hiddenList()).not.toContainText('unrelated');
   });
 
-  test('ultra hide respects revealed post', async ({ page }) => {
+  test.skip('ultra hide respects revealed post // keywords disabled (AI categorize replaces them)', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       html: fixtureHtml([
@@ -80,7 +80,7 @@ test.describe('Hidden / Ultra hide flows', () => {
     expect(notUltra).toBe(true);
   });
 
-  test('RESET clears hidden/ultra/viewed classes and queues', async ({ page }) => {
+  test.skip('RESET clears hidden/ultra/viewed classes and queues // keywords disabled (AI categorize replaces them)', async ({ page }) => {
     const fp = new LinkedInFeedPage(page);
     await fp.goto('https://www.linkedin.com/feed/', {
       html: fixtureHtml([{ text: 'asp.net role' }])

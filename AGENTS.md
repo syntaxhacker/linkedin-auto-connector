@@ -87,6 +87,11 @@ dashboard work needed. Steps:
   mirrors it as CSS vars. Keep in sync manually.
 - **CI**: `.github/workflows/ci.yml` runs `npm test` + `npx playwright test`
   (chromium) on push/PR.
+- **Keywords are DISABLED** (AI categorize replaces them): `content.js`
+  comments out `filterPosts`/`scanKeywords` in `scanFeed`, CSS hides
+  `#li-ac-grp-kw` + the keyword/excluded tabs, `background.js` no longer
+  registers the right-click menu, and the keyword→category seed is commented
+  out. Functions/config keys remain for rollback; re-enable by uncommenting.
 - **Config**: `cfg` from `chrome.storage.sync`, defaulted in
   `chrome.storage.sync.get(...)` (content.js:3486) and at `let cfg = {...}`
   (content.js:39). Keys: `autoExpand, scanEmails, includeKeywords,

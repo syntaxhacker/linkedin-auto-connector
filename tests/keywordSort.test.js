@@ -164,7 +164,7 @@ describe('found panel: sort/↑/↓ bars hidden when a section has no hits', () 
     expect(document.getElementById('li-ac-panel-list').textContent).toContain('No email matches');
   });
 
-  test('keyword hits exist -> keyword sort bar visible', async () => {
+  test.skip('keyword hits exist -> keyword sort bar visible // keywords disabled (AI categorize replaces them)', async () => {
     await scan(['React developer opening details here'], { includeKeywords: ['react'] });
 
     expect(document.getElementById('li-ac-kw-sortbar').style.display).toBe('flex');

@@ -230,7 +230,7 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
     expect(snippet.style.fontSize).toBe('12px');
   });
 
-  test('per-post Show reveals hidden posts without a re-scan', async () => {
+  test.skip('per-post Show reveals hidden posts without a re-scan // keywords disabled (AI categorize replaces them)', async () => {
     await openPanelWithHits();
     // Hide a post via exclude, then reveal it from the Found panel's Hidden list.
     global.__LI.setCfg({ excludeKeywords: ['one'] });
@@ -252,7 +252,7 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
     expect(global.__LI.getPosts().length).toBeGreaterThan(0);
   });
 
-  test('Hidden list lists hidden posts with a per-post Show toggle', async () => {
+  test.skip('Hidden list lists hidden posts with a per-post Show toggle // keywords disabled (AI categorize replaces them)', async () => {
     await openPanelWithHits();
     global.__LI.setCfg({ excludeKeywords: ['one'] });
     sendMessage({ type: 'FEED_SCAN' });
@@ -277,7 +277,7 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
     expect(global.__LI.getPosts().length).toBeGreaterThan(0);
   });
 
-  test('re-hiding a revealed post works from the Hidden list', async () => {
+  test.skip('re-hiding a revealed post works from the Hidden list // keywords disabled (AI categorize replaces them)', async () => {
     await openPanelWithHits();
     global.__LI.setCfg({ excludeKeywords: ['one'] });
     sendMessage({ type: 'FEED_SCAN' });
@@ -305,7 +305,7 @@ describe('list navigation (↑/↓ arrows) + Enter-to-add', () => {
     expect(found.querySelector('[data-hidden-toggle="show"]')).not.toBeNull();
   });
 
-  test('clicking a hidden list row scrolls to the hidden post in the feed', async () => {
+  test.skip('clicking a hidden list row scrolls to the hidden post in the feed // keywords disabled (AI categorize replaces them)', async () => {
     await openPanelWithHits();
     global.__LI.setCfg({ excludeKeywords: ['one'] });
     sendMessage({ type: 'FEED_SCAN' });

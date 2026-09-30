@@ -149,6 +149,16 @@ describe('jev panel wiring', () => {
     expect(global.__LI.getJevCategories()[0].criteria).toBe('wrapped criteria text');
   });
 
+  test('endpoint and model inputs are hidden for now', async () => {
+    await openPanel();
+    const adv = q('#li-ac-llm-advanced');
+    expect(adv).not.toBeNull();
+    expect(adv.style.display).toBe('none');
+    // elements still exist so stored overrides keep working
+    expect(q('#li-ac-llm-endpoint')).not.toBeNull();
+    expect(q('#li-ac-llm-model')).not.toBeNull();
+  });
+
   test('storage changes re-render the editor', async () => {
     await openPanel();
     global.__onChanged({ jevCategories: { newValue: [{ id: 'z', label: 'zed', criteria: 'zz', action: 'collapse' }] } }, 'sync');

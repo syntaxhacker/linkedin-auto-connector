@@ -87,6 +87,9 @@ dashboard work needed. Steps:
   mirrors it as CSS vars. Keep in sync manually.
 - **CI**: `.github/workflows/ci.yml` runs `npm test` + `npx playwright test`
   (chromium) on push/PR.
+- **Endpoint + Model inputs are hidden** for now (`#li-ac-llm-advanced` wrapper
+  is `display:none`); provider defaults are used. The elements and their
+  config keys still work — un-hide the wrapper to expose them again.
 - **Keywords are DISABLED** (AI categorize replaces them): `content.js`
   comments out `filterPosts`/`scanKeywords` in `scanFeed`, CSS hides
   `#li-ac-grp-kw` + the keyword/excluded tabs, `background.js` no longer

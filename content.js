@@ -1982,10 +1982,14 @@
               '<input type="password" id="li-ac-jev-key" autocomplete="new-password" value="" placeholder="' + escHtml(getLlmKey(String(cfg.llmProviderId)) ? 'key saved ✓ (paste to replace)' : 'paste key, then Enter') + '" style="flex:1;min-width:0;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;">' +
               '<button id="li-ac-jev-key-clear" title="Remove the saved key" style="flex:none;padding:7px 10px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Clear</button>' +
             '</div>' +
+            // Endpoint + Model hidden for now (provider defaults are used).
+            // Re-enable by removing the display:none wrapper.
+            '<div id="li-ac-llm-advanced" style="display:none;">' +
             '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Endpoint (blank = default)</div>' +
             '<input id="li-ac-llm-endpoint" autocomplete="off" value="' + escHtml((cfg.llmEndpoints && cfg.llmEndpoints[String(cfg.llmProviderId)]) || '') + '" placeholder="' + escHtml(getProvider(cfg.llmProviderId).defaultEndpoint) + '" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;margin-bottom:8px;">' +
             '<div style="font-size:13px;color:' + BW.muted + ';margin-bottom:5px;">Model</div>' +
             '<input id="li-ac-llm-model" autocomplete="off" value="' + escHtml((cfg.llmModels && cfg.llmModels[String(cfg.llmProviderId)]) || '') + '" placeholder="' + escHtml(getProvider(cfg.llmProviderId).defaultModel) + '" style="width:100%;padding:7px 8px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;margin-bottom:8px;">' +
+            '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;">' +
               '<label for="li-ac-jev-minconf" style="color:' + BW.muted + ';" title="Below this confidence a post is marked unsure">Min confidence</label>' +
               '<input type="number" id="li-ac-jev-minconf" min="0" max="1" step="0.05" value="' + (Math.min(1, Math.max(0, Number(cfg.jevMinConfidence) || 0))) + '" style="width:64px;padding:4px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;text-align:center;">' +

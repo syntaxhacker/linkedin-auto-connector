@@ -161,7 +161,7 @@ dashboard work needed. Steps:
   chip is painted with it; low confidence no longer downgrades to `unsure` —
   the model's bucket is kept and the chip is drawn at 35% with a dashed border
   plus a 'low confidence' tooltip.
-  Model helpers: normalize/get/set/add/update/remove/move + jevCategoryById;
+  Model helpers: normalize/get/set/add/update/removeJevCategory + jevCategoryById;
   `buildJevCategories()` maps id -> "label: criteria" for providers and
   `buildJevPromptFromCategories` renders the fixed skeleton + the user's
   bullets + `JEV_PROMPT_TAIL`. Legacy migration (`migrateLegacyCategories`,

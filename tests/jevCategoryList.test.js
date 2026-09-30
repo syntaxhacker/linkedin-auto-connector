@@ -39,7 +39,7 @@ describe('jev categories — user-owned model', () => {
       .toBeLessThanOrEqual(global.__LI.JEV_MAX_CATEGORIES);
   });
 
-  test('add / update / remove / move', () => {
+  test('add / update / remove', () => {
     global.__LI.addJevCategory({ id: 'java', label: 'java' });
     global.__LI.addJevCategory({ id: 'unsure-ish', label: 'unsure', action: 'collapse' });
     expect(global.__LI.getJevCategories().map(c => c.id)).toEqual(['relevant', 'java', 'unsure-ish']);
@@ -48,9 +48,6 @@ describe('jev categories — user-owned model', () => {
     const java = global.__LI.getJevCategories().find(c => c.id === 'java');
     expect(java.criteria).toBe('Java-heavy posts');
     expect(java.action).toBe('collapse');
-
-    global.__LI.moveJevCategory('unsure-ish', -1);
-    expect(global.__LI.getJevCategories().map(c => c.id)).toEqual(['relevant', 'unsure-ish', 'java']);
 
     global.__LI.removeJevCategory('java');
     expect(global.__LI.getJevCategories().map(c => c.id)).toEqual(['relevant', 'unsure-ish']);

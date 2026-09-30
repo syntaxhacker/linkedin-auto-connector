@@ -83,7 +83,7 @@ describe('jev panel wiring', () => {
     expect(hide.classList.contains('li-ac-jev-concealed')).toBe(false);
   });
 
-  test('add / remove / reorder from the panel', async () => {
+  test('add / remove from the panel', async () => {
     await openPanel();
     q('#li-ac-jev-cat-add').click();
     expect(global.__LI.getJevCategories().length).toBe(2);

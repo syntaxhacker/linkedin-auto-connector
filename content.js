@@ -2136,8 +2136,6 @@
             '</div>' +
             '<textarea data-cat-criteria="' + escHtml(c.id) + '" rows="2" wrap="soft" placeholder="What matches this? e.g. Java-heavy posts, 8+ yrs, walk-ins (drag the corner to make it taller)" title="What the AI should match for this category — drag the bottom-right corner to resize" style="width:100%;box-sizing:border-box;min-height:38px;max-height:40vh;padding:5px 7px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:12px;line-height:1.35;resize:vertical;">' + escHtml(c.criteria) + '</textarea>' +
             '<div style="display:flex;justify-content:flex-end;gap:5px;margin-top:4px;">' +
-              '<button data-cat-up="' + escHtml(c.id) + '" title="Move up" style="padding:3px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;cursor:pointer;">↑</button>' +
-              '<button data-cat-down="' + escHtml(c.id) + '" title="Move down" style="padding:3px 8px;background:' + BW.accentBg + ';color:' + BW.accentFg + ';border:none;border-radius:4px;font-size:11px;cursor:pointer;">↓</button>' +
               '<button data-cat-remove="' + escHtml(c.id) + '" title="Remove this category" style="padding:3px 9px;background:' + C.danger + ';color:#450a0a;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">Remove</button>' +
             '</div>' +
           '</div>';
@@ -2179,12 +2177,8 @@
         jevCatHost.addEventListener('click', e => {
           const t = e.target;
           if (!t) return;
-          const up = t.getAttribute('data-cat-up');
-          const down = t.getAttribute('data-cat-down');
           const rm = t.getAttribute('data-cat-remove');
-          if (up) { moveJevCategory(up, -1); commitCategories(getJevCategories(), 'reordered'); }
-          else if (down) { moveJevCategory(down, 1); commitCategories(getJevCategories(), 'reordered'); }
-          else if (rm) {
+          if (rm) {
             if (getJevCategories().length <= 1) { markJevPromptSaved('at least one category is required'); return; }
             removeJevCategory(rm);
             commitCategories(getJevCategories(), 'category removed');
@@ -2642,17 +2636,6 @@
     if (list.length <= 1) return false; // never zero categories
     const next = list.filter(c => c.id !== id);
     if (next.length === list.length) return false;
-    setJevCategories(next);
-    return true;
-  }
-  function moveJevCategory(id, delta) {
-    const list = getJevCategories();
-    const i = list.findIndex(c => c.id === id);
-    if (i === -1) return false;
-    const j = i + (delta < 0 ? -1 : 1);
-    if (j < 0 || j >= list.length) return false;
-    const next = list.slice();
-    const tmp = next[i]; next[i] = next[j]; next[j] = tmp;
     setJevCategories(next);
     return true;
   }
@@ -4094,7 +4077,7 @@
     validateEndpoint, truncatePostText, buildJevItems,
     buildJevCategories, buildJevPrompt, getEffectiveJevPrompt, buildJevQuestions,
     getJevCategories, setJevCategories, addJevCategory, updateJevCategory, removeJevCategory,
-    moveJevCategory, normalizeJevCategories, buildJevPromptFromCategories, jevCategoryById,
+    normalizeJevCategories, buildJevPromptFromCategories, jevCategoryById,
     migrateLegacyCategories, JEV_PROMPT_FIRST_LINE, JEV_PROMPT_TAIL, JEV_MAX_CATEGORIES,
     looksLikeLegacyPrompt, parseLegacyPromptCells, seedCategoryTextFromKeywords,
     jevUnseenPosts, jevClassifyPosts, llmClassifyPosts, jevReset, applyJevChip, markJevPending, JEV_PENDING_CLS, updateJevStatus,

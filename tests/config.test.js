@@ -43,7 +43,7 @@ describe('content.js initialization', () => {
       // Jev / LLM surface
       'buildJevCategories', 'buildJevPrompt', 'getEffectiveJevPrompt',
       'getJevCategories', 'setJevCategories', 'addJevCategory', 'updateJevCategory',
-      'removeJevCategory', 'moveJevCategory', 'normalizeJevCategories',
+      'removeJevCategory', 'normalizeJevCategories',
       'buildJevPromptFromCategories', 'migrateLegacyCategories', 'parseLegacyPromptCells',
       'buildJevQuestions', 'buildJevItems', 'truncatePostText',
       'jevUnseenPosts', 'jevClassifyPosts', 'llmClassifyPosts', 'jevReset',

@@ -110,11 +110,13 @@ describe('jev classify', () => {
     expect(post.querySelector('.li-ac-jev-chip').getAttribute('data-jev-category')).toBe('relevant');
   });
 
-  test('below-threshold confidence becomes unsure', async () => {
+  test('below-threshold confidence keeps the bucket and flags it', async () => {
     const post = makePost('Vague post about something');
     global.fetch = mockFetchAnswers({ c0: { choice: 'relevant', confidence: 0.3, probabilities: {} } });
     await global.__LI.jevClassifyPosts([post]);
-    expect(post.querySelector('.li-ac-jev-chip').getAttribute('data-jev-category')).toBe('unsure');
+    const chip = post.querySelector('.li-ac-jev-chip');
+    expect(chip.getAttribute('data-jev-category')).toBe('relevant');
+    expect(chip.title).toMatch(/low confidence/i);
   });
 
   test('missing answer for a question becomes unsure without throwing', async () => {

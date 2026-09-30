@@ -114,15 +114,26 @@ describe('jev categories — user-owned model', () => {
     expect(global.__LI.jevConcealedCount()).toBe(1);
   });
 
-  test('resolveJevCategory accepts only known bucket ids', () => {
+  test('resolveJevCategory accepts only known bucket ids (low conf keeps the id)', () => {
     global.__LI.setJevCategories([
       { id: 'yes', label: 'relevant', criteria: '', action: 'expand' },
     ]);
     const map = global.__LI.buildJevCategories();
     expect(global.__LI.resolveJevCategory({ choice: 'yes', confidence: 0.9 }, map, 0.7))
-      .toEqual({ cat: 'yes', conf: 0.9 });
+      .toEqual({ cat: 'yes', conf: 0.9, lowConfidence: false });
+    // unknown ids fall back to unsure
     expect(global.__LI.resolveJevCategory({ choice: 'nope', confidence: 0.9 }, map, 0.7).cat).toBe('unsure');
-    expect(global.__LI.resolveJevCategory({ choice: 'yes', confidence: 0.2 }, map, 0.7).cat).toBe('unsure');
+    // low confidence keeps the model's bucket, flagged
+    expect(global.__LI.resolveJevCategory({ choice: 'yes', confidence: 0.2 }, map, 0.7))
+      .toEqual({ cat: 'yes', conf: 0.2, lowConfidence: true });
+  });
+
+  test('every category gets a colour, unique when possible', () => {
+    const cats = global.__LI.normalizeJevCategories([{ id: 'a', label: 'a' }, { id: 'b', label: 'b' }, { id: 'c', label: 'c' }]);
+    cats.forEach(c => expect(c.color).toMatch(/^#[0-9a-f]{6}$/i));
+    expect(new Set(cats.map(c => c.color)).size).toBe(3);
+    const kept = global.__LI.normalizeJevCategories([{ id: 'a', label: 'a', color: '#123456' }]);
+    expect(kept[0].color).toBe('#123456');
   });
 
   test('splits a legacy whole-prompt blob into a starter list', () => {

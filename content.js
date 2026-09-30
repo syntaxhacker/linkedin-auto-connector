@@ -2132,9 +2132,11 @@
         const cats = getJevCategories();
         host.innerHTML = cats.map((c, i) => {
           const expand = c.action === 'expand';
-          return '<div data-cat-row="' + escHtml(c.id) + '" style="border:1px solid ' + BW.border + ';border-radius:6px;padding:6px 7px;margin-bottom:6px;background:' + (expand ? 'rgba(34,197,94,.10)' : 'rgba(187,187,187,.08)') + ';">' +
+          const col = c.color || JEV_CATEGORY_COLORS[0];
+          return '<div data-cat-row="' + escHtml(c.id) + '" style="border:1px solid ' + BW.border + ';border-left:4px solid ' + col + ';border-radius:6px;padding:6px 7px;margin-bottom:6px;background:' + hexToRgba(col, 0.10) + ';">' +
             '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">' +
               '<span style="font-size:11px;color:' + BW.muted + ';flex:none;">' + (i + 1) + '.</span>' +
+              '<input type="color" data-cat-color="' + escHtml(c.id) + '" value="' + escHtml(col) + '" title="Tag colour for this category" style="flex:none;width:28px;height:26px;padding:0;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';cursor:pointer;">' +
               '<input data-cat-label="' + escHtml(c.id) + '" value="' + escHtml(c.label) + '" title="Category name (shown on posts)" style="flex:1 1 auto;min-width:0;padding:5px 7px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:13px;">' +
               '<select data-cat-action="' + escHtml(c.id) + '" title="Expand keeps these posts open; Collapse shrinks them to a one-line strip (hover to peek)" style="flex:none;padding:5px 6px;border:1px solid ' + BW.border + ';border-radius:4px;background:' + BW.bg + ';color:' + BW.fg + ';font-size:11px;">' +
                 '<option value="expand"' + (expand ? ' selected' : '') + '>Expand</option>' +
@@ -2181,7 +2183,9 @@
           const labelId = t.getAttribute('data-cat-label');
           const actionId = t.getAttribute('data-cat-action');
           const critId = t.getAttribute('data-cat-criteria');
-          if (labelId) commitCategories(list.map(c => c.id === labelId ? Object.assign({}, c, { label: t.value }) : c));
+          const colorId = t.getAttribute('data-cat-color');
+          if (colorId) commitCategories(list.map(c => c.id === colorId ? Object.assign({}, c, { color: sanitizeHex(t.value, JEV_CATEGORY_COLORS[0]) }) : c), 'colour saved');
+          else if (labelId) commitCategories(list.map(c => c.id === labelId ? Object.assign({}, c, { label: t.value }) : c));
           else if (critId) commitCategories(list.map(c => c.id === critId ? Object.assign({}, c, { criteria: t.value }) : c));
           else if (actionId) commitCategories(list.map(c => c.id === actionId ? Object.assign({}, c, { action: t.value === 'collapse' ? 'collapse' : 'expand' }) : c), 'action saved');
         });
@@ -2604,11 +2608,13 @@
       let id = String(item.id == null ? '' : item.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
       if (!id || seen.has(id)) id = newJevCategoryId('cat');
       seen.add(id);
+      const colorsUsed = out.map(c => c.color);
       out.push({
         id,
         label: normJevLabel(item.label, 'category'),
         criteria: String(item.criteria == null ? '' : item.criteria).replace(/\s+/g, ' ').trim().slice(0, 300),
         action: item.action === 'collapse' ? 'collapse' : 'expand',
+        color: sanitizeHex(item.color, jevNextColor(colorsUsed)),
       });
     });
     if (!out.length) return JEV_DEFAULT_CATEGORIES.map(c => Object.assign({}, c));
@@ -2630,6 +2636,7 @@
       label,
       criteria: String((partial && partial.criteria) || '').replace(/\s+/g, ' ').trim().slice(0, 300),
       action: partial && partial.action === 'collapse' ? 'collapse' : 'expand',
+      color: sanitizeHex(partial && partial.color, jevNextColor(list.map(c => c.color))),
     }]);
     setJevCategories(next);
     return true;
@@ -2878,16 +2885,27 @@
 
   // Chip look is derived from the bucket's ACTION (expanded = positive colour,
   // collapsed = muted), so users can invent any labels they like.
-  const JEV_CHIP_STYLE = {
-    expand: { fg: '#052e16', bg: '#22c55e', glyph: '✓' },
-    collapse: { fg: '#fff', bg: '#555555', glyph: '·' },
-    unsure: { fg: '#000', bg: '#fbbf24', glyph: '?' },
-  };
+  // Each category owns a colour (auto-assigned from this palette, editable).
+  const JEV_CATEGORY_COLORS = ['#22c55e', '#60a5fa', '#fbbf24', '#f472b6', '#a78bfa', '#34d399', '#fb923c', '#38bdf8', '#e879f9', '#94a3b8'];
+  const JEV_UNSURE_COLOR = '#fbbf24';
+  function jevNextColor(used) {
+    const taken = new Set((used || []).map(c => String(c || '').toLowerCase()));
+    return JEV_CATEGORY_COLORS.find(c => !taken.has(c)) || JEV_CATEGORY_COLORS[(used || []).length % JEV_CATEGORY_COLORS.length];
+  }
   function jevChipStyleFor(catId) {
-    if (catId === 'unsure') return { key: 'unsure', label: 'unsure', style: JEV_CHIP_STYLE.unsure };
+    if (catId === 'unsure') {
+      return { key: 'unsure', label: 'unsure', color: JEV_UNSURE_COLOR, glyph: '?', fg: getContrastColor(JEV_UNSURE_COLOR, 0, '#000') };
+    }
     const cat = jevCategoryById(catId);
-    if (!cat) return { key: 'unsure', label: 'unsure', style: JEV_CHIP_STYLE.unsure };
-    return { key: cat.action, label: cat.label, style: JEV_CHIP_STYLE[cat.action] };
+    if (!cat) return { key: 'unsure', label: 'unsure', color: JEV_UNSURE_COLOR, glyph: '?', fg: getContrastColor(JEV_UNSURE_COLOR, 0, '#000') };
+    const color = cat.color || JEV_CATEGORY_COLORS[0];
+    return {
+      key: cat.action,
+      label: cat.label,
+      color,
+      glyph: cat.action === 'expand' ? '✓' : '·',
+      fg: getContrastColor(color, 0, '#000'),
+    };
   }
 
   // Pending marker: unseen posts visibly show they're queued for Jev, so
@@ -2927,14 +2945,18 @@
       if (el.prepend) el.prepend(chip);
       else el.appendChild(chip);
     }
-    const style = chipInfo.style;
+    const lowConf = Number(confidence) > 0 && Number(confidence) < (Math.min(1, Math.max(0, Number(cfg.jevMinConfidence) || 0)));
     chip.setAttribute('data-jev-category', cat);
     chip.setAttribute('data-jev-confidence', String(confidence));
-    chip.textContent = style.glyph + ' ' + chipInfo.label;
+    chip.setAttribute('data-jev-color', chipInfo.color);
+    chip.textContent = chipInfo.glyph + ' ' + chipInfo.label;
     chip.title = 'AI category: ' + chipInfo.label +
-      (cat === 'unsure' ? ' (low confidence)' : (chipInfo.key === 'collapse' ? ' (collapsed)' : ' (expanded)')) +
-      (confidence ? ' · confidence ' + Number(confidence).toFixed(2) : '');
-    chip.style.cssText = 'display:inline-block;margin:4px 4px 0 0;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;color:' + style.fg + ';background:' + style.bg + ';';
+      (cat === 'unsure' ? ' (no confident match)' : (chipInfo.key === 'collapse' ? ' (collapsed)' : ' (expanded)')) +
+      (lowConf ? ' · low confidence' : '') +
+      (confidence ? ' · ' + Number(confidence).toFixed(2) : '');
+    chip.style.cssText = 'display:inline-block;margin:4px 4px 0 0;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;' +
+      'color:' + chipInfo.fg + ';background:' + (lowConf ? hexToRgba(chipInfo.color, 0.35) : chipInfo.color) + ';' +
+      'border:1px solid ' + chipInfo.color + ';' + (lowConf ? 'border-style:dashed;' : '');
     // Keep the invariant local so applyJevVisibility always sees a verdict.
     try { el.setAttribute('data-jev-done', cat); el.setAttribute('data-jev-cat', cat); } catch (_) {}
     applyJevVisibility(el);
@@ -3285,9 +3307,11 @@
   function resolveJevCategory(a, categories, minConf) {
     if (a && Object.prototype.hasOwnProperty.call(categories, a.choice)) {
       const conf = Number(a.confidence) || 0;
-      if (conf >= minConf) return { cat: a.choice, conf };
+      // Low confidence keeps the model's bucket (so you always see the tag),
+      // but is flagged so the chip can show it's uncertain.
+      return { cat: a.choice, conf, lowConfidence: conf < minConf };
     }
-    return { cat: 'unsure', conf: 0 };
+    return { cat: 'unsure', conf: 0, lowConfidence: false };
   }
 
   // Run pacing + guaranteed follow-up (storm control without caps):

@@ -439,15 +439,15 @@ describe('llm guardrails', () => {
     expect(leaving.querySelector('.li-ac-jev-chip').getAttribute('data-jev-category')).toBe('other');
   });
 
-  test('resolveJevCategory allowlists choices and gates confidence', () => {
+  test('resolveJevCategory allowlists choices; low confidence is flagged, not discarded', () => {
     const cats = { relevant: 'r', excluded: 'e', other: 'o' };
     expect(global.__LI.resolveJevCategory({ choice: 'relevant', confidence: 0.9 }, cats, 0.7))
-      .toEqual({ cat: 'relevant', conf: 0.9 });
+      .toEqual({ cat: 'relevant', conf: 0.9, lowConfidence: false });
     expect(global.__LI.resolveJevCategory({ choice: 'relevant', confidence: 0.3 }, cats, 0.7))
-      .toEqual({ cat: 'unsure', conf: 0 });
+      .toEqual({ cat: 'relevant', conf: 0.3, lowConfidence: true });
     expect(global.__LI.resolveJevCategory({ choice: 'constructor', confidence: 0.99 }, cats, 0.7))
-      .toEqual({ cat: 'unsure', conf: 0 });
-    expect(global.__LI.resolveJevCategory(null, cats, 0.7)).toEqual({ cat: 'unsure', conf: 0 });
+      .toEqual({ cat: 'unsure', conf: 0, lowConfidence: false });
+    expect(global.__LI.resolveJevCategory(null, cats, 0.7)).toEqual({ cat: 'unsure', conf: 0, lowConfidence: false });
   });
 
   test('legacy throttle default migrates 6 to 20, leaves customs alone', () => {
@@ -656,13 +656,15 @@ describe('llm guardrails', () => {
     expect(res.status).toBe('ok');
     expect(rel.classList.contains('li-ac-jev-concealed')).toBe(false);
     expect(exc.classList.contains('li-ac-jev-concealed')).toBe(true);
-    // low confidence → unsure → concealed too
-    expect(uns.querySelector('.li-ac-jev-chip').getAttribute('data-jev-category')).toBe('unsure');
-    expect(uns.classList.contains('li-ac-jev-concealed')).toBe(true);
+    // low confidence keeps the bucket (flagged); the bucket's action decides
+    // visibility, so an 'expand' bucket stays open
+    expect(uns.querySelector('.li-ac-jev-chip').getAttribute('data-jev-category')).toBe('relevant');
+    expect(uns.querySelector('.li-ac-jev-chip').title).toMatch(/low confidence/i);
+    expect(uns.classList.contains('li-ac-jev-concealed')).toBe(false);
     // other → concealed by default as well
     expect(oth.querySelector('.li-ac-jev-chip').getAttribute('data-jev-category')).toBe('other');
     expect(oth.classList.contains('li-ac-jev-concealed')).toBe(true);
-    expect(global.__LI.jevConcealedCount()).toBe(3);
+    expect(global.__LI.jevConcealedCount()).toBe(2);
   });
 
   test('full card wrapper is concealed too, no husk remains', async () => {

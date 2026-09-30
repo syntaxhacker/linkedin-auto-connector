@@ -156,7 +156,11 @@ dashboard work needed. Steps:
   CATEGORIES ARE USER-OWNED: `cfg.jevCategories = [{id,label,criteria,action}]`
   (ordered, max `JEV_MAX_CATEGORIES`=12, at least one). `action` is
   'expand' | 'collapse' and decides whether that bucket's posts stay open or
-  become a thin strip; the chip shows the bucket label coloured by action.
+  become a thin strip. Each bucket also owns a `color` (auto-assigned from
+  `JEV_CATEGORY_COLORS`, editable with the row's colour picker) and the post
+  chip is painted with it; low confidence no longer downgrades to `unsure` —
+  the model's bucket is kept and the chip is drawn at 35% with a dashed border
+  plus a 'low confidence' tooltip.
   Model helpers: normalize/get/set/add/update/remove/move + jevCategoryById;
   `buildJevCategories()` maps id -> "label: criteria" for providers and
   `buildJevPromptFromCategories` renders the fixed skeleton + the user's
